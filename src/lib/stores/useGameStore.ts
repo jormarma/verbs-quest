@@ -32,18 +32,21 @@ export interface GameState {
         history: AnswerStamp[]
         currentInput: string
         errorsInLevel: number
+        feedbackState: "NONE" | "CORRECT" | "INCORRECT"
+        feedbackTarget: string | null
     }
 
     // Actions
     startGame: (level: number, questions: VerbQuestion[]) => void
     submitAnswer: (answer: string) => void
+    advanceQuestion: () => void
     setInput: (input: string) => void
     pauseGame: () => void
     resumeGame: () => void
     resetGame: () => void
 }
 
-export const useGameStore = create<GameState>((set, get) => ({
+export const useGameStore = create<GameState>((set) => ({
     session: {
         level: 1,
         status: "IDLE",
@@ -59,7 +62,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         retryQueue: [],
         history: [],
         currentInput: "",
-        errorsInLevel: 0
+        errorsInLevel: 0,
+        feedbackState: "NONE",
+        feedbackTarget: null
     },
 
     startGame: (level, questions) => set({
@@ -78,7 +83,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             retryQueue: [],
             history: [],
             currentInput: "",
-            errorsInLevel: 0
+            errorsInLevel: 0,
+            feedbackState: "NONE",
+            feedbackTarget: null
         }
     }),
 
@@ -87,6 +94,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     })),
 
     submitAnswer: (answer) => set((state) => {
+        if (state.gameplay.feedbackState !== "NONE") return state // Prevent multiple submissions
+
         const isMainQueue = state.gameplay.currentQuestionIndex < state.gameplay.mainQueue.length
         const currentQ = isMainQueue
             ? state.gameplay.mainQueue[state.gameplay.currentQuestionIndex]
@@ -105,40 +114,44 @@ export const useGameStore = create<GameState>((set, get) => ({
         }]
 
         if (isCorrect) {
-            const nextIndex = state.gameplay.currentQuestionIndex + 1
-            const totalQuestions = state.gameplay.mainQueue.length + state.gameplay.retryQueue.length
-
             return {
                 gameplay: {
                     ...state.gameplay,
-                    currentQuestionIndex: nextIndex,
-                    currentInput: "",
-                    history: newHistory
-                },
-                session: {
-                    ...state.session,
-                    status: nextIndex >= totalQuestions ? "FINISHED" : "PLAYING"
+                    history: newHistory,
+                    feedbackState: "CORRECT",
+                    feedbackTarget: currentQ.target
                 }
             }
         } else {
-            // Wrong answer logic
             const updatedRetryQueue = [...state.gameplay.retryQueue, currentQ]
-            const nextIndex = state.gameplay.currentQuestionIndex + 1
-            const totalQuestions = state.gameplay.mainQueue.length + updatedRetryQueue.length
-
             return {
                 gameplay: {
                     ...state.gameplay,
-                    currentQuestionIndex: nextIndex,
                     retryQueue: updatedRetryQueue,
-                    currentInput: "",
                     errorsInLevel: state.gameplay.errorsInLevel + 1,
-                    history: newHistory
-                },
-                session: {
-                    ...state.session,
-                    status: nextIndex >= totalQuestions ? "FINISHED" : "PLAYING"
+                    history: newHistory,
+                    feedbackState: "INCORRECT",
+                    feedbackTarget: currentQ.target
                 }
+            }
+        }
+    }),
+
+    advanceQuestion: () => set((state) => {
+        const nextIndex = state.gameplay.currentQuestionIndex + 1
+        const totalQuestions = state.gameplay.mainQueue.length + state.gameplay.retryQueue.length
+
+        return {
+            gameplay: {
+                ...state.gameplay,
+                currentQuestionIndex: nextIndex,
+                currentInput: "",
+                feedbackState: "NONE",
+                feedbackTarget: null
+            },
+            session: {
+                ...state.session,
+                status: nextIndex >= totalQuestions ? "FINISHED" : "PLAYING"
             }
         }
     }),
@@ -164,7 +177,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             retryQueue: [],
             history: [],
             currentInput: "",
-            errorsInLevel: 0
+            errorsInLevel: 0,
+            feedbackState: "NONE",
+            feedbackTarget: null
         }
     })
 }))
