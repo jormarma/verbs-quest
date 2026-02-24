@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { submitLevelAttempt } from '../utils/sync'
 
 export type GameStatus = "IDLE" | "PLAYING" | "PAUSED" | "FINISHED"
 
@@ -140,6 +141,18 @@ export const useGameStore = create<GameState>((set) => ({
     advanceQuestion: () => set((state) => {
         const nextIndex = state.gameplay.currentQuestionIndex + 1
         const totalQuestions = state.gameplay.mainQueue.length + state.gameplay.retryQueue.length
+        const isFinished = nextIndex >= totalQuestions
+
+        if (isFinished && state.session.startTime) {
+            // Fire and forget the sync submission
+            submitLevelAttempt({
+                levelId: state.session.level,
+                startTime: new Date(state.session.startTime).toISOString(),
+                endTime: new Date().toISOString(),
+                errorCount: state.gameplay.errorsInLevel,
+                questionsCount: state.gameplay.mainQueue.length
+            })
+        }
 
         return {
             gameplay: {
@@ -151,7 +164,7 @@ export const useGameStore = create<GameState>((set) => ({
             },
             session: {
                 ...state.session,
-                status: nextIndex >= totalQuestions ? "FINISHED" : "PLAYING"
+                status: isFinished ? "FINISHED" : "PLAYING"
             }
         }
     }),
