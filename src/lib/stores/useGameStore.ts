@@ -24,6 +24,7 @@ export interface GameState {
         level: number
         status: GameStatus
         startTime: number | null
+        endTime: number | null
         config: {
             timeLimit: number
             baseQuestionCount: number
@@ -42,7 +43,8 @@ export interface GameState {
     }
 
     // Actions
-    startGame: (level: number, questions: VerbQuestion[]) => void
+    startGame: (level: number, questions: VerbQuestion[], delayTimer?: boolean) => void
+    startLevelTimer: () => void
     submitAnswer: (answer: string) => void
     advanceQuestion: () => void
     setInput: (input: string) => void
@@ -59,6 +61,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         level: 1,
         status: "IDLE",
         startTime: null,
+        endTime: null,
         config: {
             timeLimit: 180,
             baseQuestionCount: 5
@@ -76,11 +79,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         topScores: []
     },
 
-    startGame: (level, questions) => set({
+    startGame: (level, questions, delayTimer = false) => set({
         session: {
             level,
             status: "PLAYING",
-            startTime: Date.now(),
+            startTime: delayTimer ? null : Date.now(),
+            endTime: null,
             config: {
                 timeLimit: 180, // 3 mins per level (5 verbs)
                 baseQuestionCount: questions.length
@@ -98,6 +102,10 @@ export const useGameStore = create<GameState>((set, get) => ({
             topScores: []
         }
     }),
+
+    startLevelTimer: () => set((state) => ({
+        session: { ...state.session, startTime: Date.now() }
+    })),
 
     setInput: (input) => set((state) => ({
         gameplay: { ...state.gameplay, currentInput: input }
@@ -177,7 +185,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             },
             session: {
                 ...state.session,
-                status: isFinished ? "FINISHED" : "PLAYING"
+                status: isFinished ? "FINISHED" : "PLAYING",
+                endTime: isFinished ? Date.now() : state.session.endTime
             }
         }
     }),
@@ -195,6 +204,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             level: 1,
             status: "IDLE",
             startTime: null,
+            endTime: null,
             config: { timeLimit: 180, baseQuestionCount: 5 }
         },
         gameplay: {
@@ -211,7 +221,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
     cancelGame: () => set((state) => ({
-        session: { ...state.session, status: "IDLE", startTime: null },
+        session: { ...state.session, status: "IDLE", startTime: null, endTime: null },
         gameplay: {
             currentQuestionIndex: 0,
             mainQueue: [],
@@ -245,7 +255,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
 
         set((state) => ({
-            session: { ...state.session, status: "FINISHED" },
+            session: { ...state.session, status: "FINISHED", endTime: Date.now() },
             // Add a massive error so the UI knows it was a timeout fail
             gameplay: { ...state.gameplay, errorsInLevel: state.gameplay.errorsInLevel + 999 }
         }))

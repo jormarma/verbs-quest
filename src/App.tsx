@@ -6,19 +6,22 @@ import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { Play, LogOut, User as UserIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LogOut, User as UserIcon } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
 import { useProfile } from './lib/hooks/useProfile'
+import { useTotalLevels } from './lib/hooks/useTotalLevels'
 
 function GameBoard() {
-  const { session, gameplay, startGame, cancelGame } = useGameStore()
+  const { session, gameplay, startGame, startLevelTimer, cancelGame } = useGameStore()
   const { user, signOut } = useAuth()
 
   const { levelCap, isLoadingProfile } = useProfile()
+  const { totalLevels, isLoadingTotalLevels } = useTotalLevels()
   const [selectedLevel, setSelectedLevel] = useState<number>(1)
   const [showCancelModal, setShowCancelModal] = useState(false)
+  const [countdown, setCountdown] = useState<number | null>(null)
 
   // Sync selected level to max unlocked level when profile initially loads
   useEffect(() => {
@@ -30,7 +33,28 @@ function GameBoard() {
   const levelToPlay = selectedLevel
   const { questions, isLoading, error } = useVerbs(levelToPlay)
 
-  if (isLoadingProfile) {
+  useEffect(() => {
+    if (countdown === null) return
+
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+      return () => clearTimeout(timer)
+    } else if (countdown === 0) {
+      startLevelTimer()
+      setCountdown(null)
+    }
+  }, [countdown, startLevelTimer])
+
+  const handleLevelClick = (lvl: number) => {
+    setSelectedLevel(lvl)
+  }
+
+  const handleStartQuest = () => {
+    startGame(selectedLevel, questions, true)
+    setCountdown(3)
+  }
+
+  if (isLoadingProfile || isLoadingTotalLevels) {
     return (
       <div className="flex bg-slate-900 text-white min-h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
@@ -66,7 +90,7 @@ function GameBoard() {
           {/* Sub-header with User on the right, Timer on the left if playing */}
           <div className="flex justify-between items-center w-full h-10">
             <div className="flex items-center">
-              {session.status === 'PLAYING' && <Timer />}
+              {session.status === 'PLAYING' && countdown === null && <Timer />}
             </div>
 
             <div className="flex items-center gap-2">
@@ -93,48 +117,53 @@ function GameBoard() {
         <section className="flex-1 flex flex-col items-center justify-center w-full max-w-5xl mx-auto my-8">
 
           {session.status === 'IDLE' && (
-            <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <div className="text-center space-y-4">
+            <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-2xl px-4">
+              <div className="text-center space-y-4 w-full">
+                <h2 className="text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-6">Quest Levels</h2>
 
-                <div className="flex items-center justify-center gap-4">
-                  <button
-                    onClick={() => setSelectedLevel(Math.max(1, selectedLevel - 1))}
-                    disabled={selectedLevel <= 1}
-                    className="p-3 bg-slate-800/80 backdrop-blur rounded-full border border-slate-700 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-slate-300 hover:text-white shadow-lg active:scale-95"
-                  >
-                    <ChevronLeft size={28} />
-                  </button>
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3 md:gap-4 w-full">
+                  {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
+                    const isLocked = lvl > levelCap
+                    const isHighestUnlocked = lvl === levelCap
+                    const isSelected = lvl === selectedLevel
 
-                  <div className="w-48 text-center flex flex-col items-center justify-center">
-                    <span className="text-base text-slate-400 font-bold tracking-widest uppercase mb-1">Select Level</span>
-                    <h2 className="text-5xl md:text-6xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent">{selectedLevel}</h2>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedLevel(Math.min(levelCap, selectedLevel + 1))}
-                    disabled={selectedLevel >= levelCap}
-                    className="p-3 bg-slate-800/80 backdrop-blur rounded-full border border-slate-700 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-slate-300 hover:text-white shadow-lg active:scale-95"
-                  >
-                    <ChevronRight size={28} />
-                  </button>
+                    return (
+                      <button
+                        key={lvl}
+                        disabled={isLocked || isLoading}
+                        onClick={() => handleLevelClick(lvl)}
+                        className={cn(
+                          "relative flex flex-col items-center justify-center aspect-square rounded-2xl transition-all duration-300 border-2 overflow-hidden shadow-lg group",
+                          isLocked ? "bg-slate-800/40 text-slate-500 border-slate-700 opacity-60 cursor-not-allowed" :
+                            isHighestUnlocked ? "bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)] hover:scale-110 active:scale-95" :
+                              "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:border-slate-500 hover:scale-105 active:scale-95",
+                          isSelected && !isLocked && "ring-4 ring-offset-2 ring-offset-slate-900 ring-blue-500 scale-105 border-transparent!"
+                        )}
+                      >
+                        {isHighestUnlocked && (
+                          <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-colors pointer-events-none" />
+                        )}
+                        <span className="font-black text-2xl md:text-3xl z-10">{lvl}</span>
+                      </button>
+                    )
+                  })}
                 </div>
 
-                <p className="text-lg text-blue-200/80 mt-4">Identify the correct past forms of the verbs.</p>
-                {selectedLevel < levelCap && (
-                  <p className="text-sm font-bold text-emerald-400 bg-emerald-900/30 inline-block px-3 py-1 rounded-full border border-emerald-500/20">
-                    Practicing Past Level
-                  </p>
-                )}
+                <p className="text-lg text-blue-200/80 mt-6 font-medium">Tap an unlocked level to begin.</p>
+
                 {error && <p className="text-red-400 font-bold mt-2">Error loading verbs: {error}</p>}
               </div>
-              <Button
-                size="lg"
-                disabled={isLoading || questions.length === 0}
-                className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center mt-2"
-                onClick={() => startGame(levelToPlay, questions)}
-              >
-                <Play className="mr-3 h-8 w-8" /> {isLoading ? 'Loading...' : 'Start Quest'}
-              </Button>
+
+              <div className="flex flex-col items-center mt-2 w-full">
+                <Button
+                  size="lg"
+                  disabled={isLoading || questions.length === 0}
+                  className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center"
+                  onClick={handleStartQuest}
+                >
+                  {isLoading ? 'Loading...' : 'Start Quest'}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -163,7 +192,23 @@ function GameBoard() {
           )}
 
           {session.status === 'PLAYING' && currentQ && (
-            <div className="w-full flex-1 flex flex-col items-center justify-center gap-12 animate-in zoom-in-95 duration-500">
+            <div className="w-full flex-1 flex flex-col items-center justify-center gap-12 animate-in zoom-in-95 duration-500 relative">
+              {/* Countdown Modal Overlay over the gameplay screen */}
+              {countdown !== null && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md rounded-2xl p-4">
+                  <div className="bg-slate-800/90 shadow-[0_0_60px_rgba(52,211,153,0.3)] rounded-[3rem] w-64 h-64 md:w-80 md:h-80 flex items-center justify-center border-[6px] border-emerald-500/80 backdrop-blur-xl overflow-hidden relative">
+                    {countdown > 0 && (
+                      <div
+                        key={countdown}
+                        className="text-[8rem] md:text-[12rem] font-black bg-gradient-to-br from-emerald-300 to-blue-400 bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(52,211,153,0.8)] animate-countdown-zoom"
+                      >
+                        {countdown}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Question Card */}
               <div className="text-center space-y-4">
                 <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 text-sm font-bold uppercase tracking-widest shadow-inner">
@@ -205,12 +250,14 @@ function GameBoard() {
               </div>
 
               {/* Cancel Button (Middle Area) */}
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowCancelModal(true)}
-                className="mt-2 text-sm font-bold text-slate-500 hover:text-rose-400 transition-colors underline underline-offset-4 decoration-slate-700 hover:decoration-rose-400/50"
+                className="mt-2 text-sm font-bold border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-950/30 transition-all tracking-wide"
               >
                 Cancel Run
-              </button>
+              </Button>
             </div>
           )}
 
@@ -262,46 +309,83 @@ function GameBoard() {
                   {gameplay.topScores.length === 0 ? (
                     <div className="text-center py-4 text-slate-400 animate-pulse">Loading scores...</div>
                   ) : (
-                    <ul className="space-y-2">
-                      {gameplay.topScores.slice(0, 3).map((score: any, idx: number) => {
-                        const minutes = Math.floor(score.duration_seconds / 60)
-                        const seconds = score.duration_seconds % 60
-                        const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`
+                    <>
+                      <ul className="space-y-2">
+                        {gameplay.topScores.slice(0, 3).map((score: any, idx: number) => {
+                          const minutes = Math.floor(score.duration_seconds / 60)
+                          const seconds = score.duration_seconds % 60
+                          const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`
 
-                        // Check if the score is brand new (less than 5 seconds old)
-                        const isNew = new Date().getTime() - new Date(score.completed_at).getTime() < 5000
+                          // Check if the score is brand new (less than 5 seconds old)
+                          const isNew = new Date().getTime() - new Date(score.completed_at).getTime() < 5000
 
-                        return (
-                          <li key={idx} className={cn(
-                            "flex justify-between items-center p-2 md:p-3 border rounded-lg",
-                            isNew ? "bg-emerald-900/40 border-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.2)] animate-pulse" : "bg-slate-800/50 border-slate-700/50"
-                          )}>
-                            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-                              <div className={cn(
-                                "flex items-center justify-center w-7 h-7 md:w-9 md:h-9 rounded-full font-black text-slate-900 shrink-0 shadow-md",
-                                idx === 0 ? "bg-yellow-400" :
-                                  idx === 1 ? "bg-slate-300" :
-                                    "bg-amber-600 text-white"
-                              )}>
-                                <span className="text-sm md:text-base">{idx + 1}</span>
+                          return (
+                            <li key={idx} className={cn(
+                              "flex justify-between items-center p-2 md:p-3 border rounded-lg",
+                              isNew ? "bg-emerald-900/40 border-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.2)] animate-pulse" : "bg-slate-800/50 border-slate-700/50"
+                            )}>
+                              <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+                                <div className={cn(
+                                  "flex items-center justify-center w-7 h-7 md:w-9 md:h-9 rounded-full font-black text-slate-900 shrink-0 shadow-md",
+                                  idx === 0 ? "bg-yellow-400" :
+                                    idx === 1 ? "bg-slate-300" :
+                                      "bg-amber-600 text-white"
+                                )}>
+                                  <span className="text-sm md:text-base">{idx + 1}</span>
+                                </div>
+                                <span className="font-mono text-base md:text-xl text-white font-medium pl-1 md:pl-0">{timeString}</span>
+                                {isNew && (
+                                  <span className="text-[9px] md:text-[10px] font-black tracking-widest text-emerald-300 bg-emerald-900 px-1.5 py-0.5 rounded-full border border-emerald-500 ml-1 md:ml-2">
+                                    NEW BEST!
+                                  </span>
+                                )}
                               </div>
-                              <span className="font-mono text-base md:text-xl text-white font-medium pl-1 md:pl-0">{timeString}</span>
-                              {isNew && (
-                                <span className="text-[9px] md:text-[10px] font-black tracking-widest text-emerald-300 bg-emerald-900 px-1.5 py-0.5 rounded-full border border-emerald-500 ml-1 md:ml-2">
-                                  NEW BEST!
-                                </span>
+                              {score.is_perfect_run && (
+                                <div className="flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full shrink-0">
+                                  <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">PERFECT</span>
+                                  <span>⭐</span>
+                                </div>
                               )}
-                            </div>
-                            {score.is_perfect_run && (
-                              <div className="flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full shrink-0">
-                                <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">PERFECT</span>
-                                <span>⭐</span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+
+                      {(() => {
+                        const currentDuration = session.endTime && session.startTime
+                          ? Math.floor((session.endTime - session.startTime) / 1000)
+                          : null;
+
+                        const top3Scores = gameplay.topScores.slice(0, 3);
+                        const isRunInTop3 = top3Scores.some((s: any) => new Date().getTime() - new Date(s.completed_at).getTime() < 10000);
+
+                        if (!isRunInTop3 && currentDuration !== null) {
+                          const mins = Math.floor(currentDuration / 60);
+                          const secs = currentDuration % 60;
+                          const isPerfect = gameplay.errorsInLevel === 0;
+                          return (
+                            <div className="mt-4 pt-4 border-t border-slate-700/50">
+                              <span className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 block text-center">Your Last Run</span>
+                              <div className="flex justify-between items-center p-2 md:p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg shadow-inner backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">
+                                <span className="text-blue-200 font-bold text-sm tracking-wider flex items-center gap-2">
+                                  Current Time
+                                </span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono text-base md:text-xl text-blue-100 font-black tracking-wider">{mins}:{secs.toString().padStart(2, '0')}</span>
+                                  {isPerfect && (
+                                    <div className="flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full shrink-0">
+                                      <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">PERFECT</span>
+                                      <span>⭐</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </li>
-                        )
-                      })}
-                    </ul>
+                            </div>
+                          )
+                        }
+                        return null;
+                      })()}
+                    </>
                   )}
                 </div>
               )}
@@ -319,7 +403,7 @@ function GameBoard() {
 
         {/* Keyboard Footer */}
         {session.status === 'PLAYING' && (
-          <div className="w-full pb-4 animate-in slide-in-from-bottom-24 duration-500">
+          <div className={cn("w-full pb-4 transition-opacity duration-300", countdown !== null ? "opacity-50 pointer-events-none" : "animate-in slide-in-from-bottom-24 duration-500")}>
             <VirtualKeyboard />
           </div>
         )}

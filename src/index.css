@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+@theme {
+  --animate-countdown-zoom: countdown-zoom 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+
+  @keyframes countdown-zoom {
+    from {
+      transform: scale(1);
+      opacity: 0;
+    }
+
+    10% {
+      opacity: 1;
+    }
+
+    85% {
+      opacity: 0.9;
+    }
+
+    to {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
