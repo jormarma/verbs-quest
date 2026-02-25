@@ -1,21 +1,42 @@
+import { useState, useEffect } from 'react'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { useAuth } from './features/auth/AuthContext'
 import { useGameStore } from './lib/stores/useGameStore'
 import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
+import { MockDashboard } from './components/game/MockDashboard'
 import { Button } from './components/ui/Button'
-import { Play, LogOut, User as UserIcon } from 'lucide-react'
+import { Play, LogOut, User as UserIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
+import { useProfile } from './lib/hooks/useProfile'
 
 function GameBoard() {
   const { session, gameplay, startGame } = useGameStore()
   const { user, signOut } = useAuth()
 
-  const levelToPlay = user?.user_metadata?.current_level_cap || 1
+  const { levelCap, isLoadingProfile } = useProfile()
+  const [selectedLevel, setSelectedLevel] = useState<number>(1)
+
+  // Sync selected level to max unlocked level when profile initially loads
+  useEffect(() => {
+    if (levelCap > 0) {
+      setSelectedLevel(levelCap)
+    }
+  }, [levelCap])
+
+  const levelToPlay = selectedLevel
   const { questions, isLoading, error } = useVerbs(levelToPlay)
+
+  if (isLoadingProfile) {
+    return (
+      <div className="flex bg-slate-900 text-white min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+      </div>
+    )
+  }
 
   // Derived state to show current question
   const isMainQueue = gameplay.currentQuestionIndex < gameplay.mainQueue.length
@@ -73,15 +94,43 @@ function GameBoard() {
 
           {session.status === 'IDLE' && (
             <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <div className="text-center space-y-2">
-                <h2 className="text-4xl md:text-6xl font-black drop-shadow-lg text-white">Ready for Level {levelToPlay}?</h2>
-                <p className="text-lg text-blue-200/80">Identify the correct past forms of the verbs.</p>
+              <div className="text-center space-y-4">
+
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => setSelectedLevel(Math.max(1, selectedLevel - 1))}
+                    disabled={selectedLevel <= 1}
+                    className="p-3 bg-slate-800/80 backdrop-blur rounded-full border border-slate-700 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-slate-300 hover:text-white shadow-lg active:scale-95"
+                  >
+                    <ChevronLeft size={28} />
+                  </button>
+
+                  <div className="w-48 text-center flex flex-col items-center justify-center">
+                    <span className="text-base text-slate-400 font-bold tracking-widest uppercase mb-1">Select Level</span>
+                    <h2 className="text-5xl md:text-6xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent">{selectedLevel}</h2>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedLevel(Math.min(levelCap, selectedLevel + 1))}
+                    disabled={selectedLevel >= levelCap}
+                    className="p-3 bg-slate-800/80 backdrop-blur rounded-full border border-slate-700 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-slate-300 hover:text-white shadow-lg active:scale-95"
+                  >
+                    <ChevronRight size={28} />
+                  </button>
+                </div>
+
+                <p className="text-lg text-blue-200/80 mt-4">Identify the correct past forms of the verbs.</p>
+                {selectedLevel < levelCap && (
+                  <p className="text-sm font-bold text-emerald-400 bg-emerald-900/30 inline-block px-3 py-1 rounded-full border border-emerald-500/20">
+                    Practicing Past Level
+                  </p>
+                )}
                 {error && <p className="text-red-400 font-bold mt-2">Error loading verbs: {error}</p>}
               </div>
               <Button
                 size="lg"
                 disabled={isLoading || questions.length === 0}
-                className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center"
+                className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center mt-2"
                 onClick={() => startGame(levelToPlay, questions)}
               >
                 <Play className="mr-3 h-8 w-8" /> {isLoading ? 'Loading...' : 'Start Quest'}
@@ -135,19 +184,50 @@ function GameBoard() {
 
           {session.status === 'FINISHED' && (
             <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-700">
-              <h2 className="text-5xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Level Complete!</h2>
+              {gameplay.errorsInLevel === 0 && session.level === 18 ? (
+                <div className="flex flex-col items-center animate-bounce">
+                  <h2 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-emerald-400 to-yellow-300 drop-shadow-[0_0_25px_rgba(252,211,77,0.8)]">
+                    🎉 INCREDIBLE! 🎉
+                  </h2>
+                  <p className="text-3xl font-bold mt-4 text-emerald-300 drop-shadow-md">YOU MASTERED ALL LEVELS!</p>
+                </div>
+              ) : gameplay.errorsInLevel < 100 ? (
+                <h2 className="text-5xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Level Complete!</h2>
+              ) : (
+                <h2 className="text-5xl font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">Level Failed!</h2>
+              )}
+
               <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl text-center space-y-2">
-                <p className="text-xl text-slate-300">Errors made for Retry Queue:
-                  <span className="font-bold text-white ml-2">{gameplay.errorsInLevel}</span>
-                </p>
-                <p className="text-slate-400 text-sm">(This mock is ready to be connected to the Anti-Cheat RPC in Phase 5)</p>
+                {gameplay.errorsInLevel === 0 ? (
+                  session.level === 18 ? (
+                    <p className="text-2xl text-yellow-300 font-bold">Absolutely perfect! A true master of irregular verbs!</p>
+                  ) : session.level < levelCap ? (
+                    <p className="text-xl text-slate-300">Perfect run! Well done practicing.</p>
+                  ) : (
+                    <p className="text-xl text-slate-300">Perfect run! You unlocked the next level.</p>
+                  )
+                ) : gameplay.errorsInLevel < 100 ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xl text-slate-300">Errors made: {gameplay.errorsInLevel}</p>
+                    <p className="text-yellow-400 font-bold">Good job, but you need a perfect run to unlock the next level.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xl text-red-400 font-bold">Time's up!</p>
+                    {session.level > 1 ? (
+                      <p className="text-red-300">You lost access to this level. Beat the previous one to unlock it again!</p>
+                    ) : (
+                      <p className="text-red-300">Keep trying! You will get it next time.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <Button
                 onClick={() => window.location.reload()}
                 className="mt-4"
                 variant="outline"
               >
-                Reset Prototype
+                Continue
               </Button>
             </div>
           )}
@@ -161,6 +241,9 @@ function GameBoard() {
         )}
 
       </main>
+
+      {/* Mock Dev Tools */}
+      <MockDashboard />
     </div>
   )
 }

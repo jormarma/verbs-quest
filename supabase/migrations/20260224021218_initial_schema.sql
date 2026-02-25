@@ -83,14 +83,14 @@ LANGUAGE plpgsql
 SECURITY DEFINER -- Runs as DB owner to bypass RLS for the users table update
 AS $$
 DECLARE
-    v_user_id TEXT;
+    v_user_id UUID;
     v_duration_seconds INT;
     v_is_perfect BOOLEAN;
-    v_level_time_limit INT := 120; -- Matches MVP config
+    v_level_time_limit INT := 100; -- 3 minutes
     v_new_level_cap INT;
 BEGIN
     -- Validation 2 (Identity)
-    v_user_id := auth.uid()::text;
+    v_user_id := auth.uid();
     IF v_user_id IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
@@ -103,7 +103,9 @@ BEGIN
         RAISE EXCEPTION 'Anti-cheat triggered: Completion time physically impossible';
     END IF;
 
-    v_is_perfect := (p_error_count = 0 AND v_duration_seconds <= v_level_time_limit);
+    v_on_time := (v_duration_seconds <= v_level_time_limit);
+    v_no_errors := (p_error_count = 0);
+    v_is_perfect := (v_on_time AND v_no_errors);
 
     -- Execution
     INSERT INTO public.game_sessions (
@@ -115,15 +117,26 @@ BEGIN
     );
 
     IF v_is_perfect THEN
-        -- Unlock next level
+        -- Case 1 and 5: Unlock next level
         UPDATE public.users 
-        SET current_level_cap = GREATEST(current_level_cap, p_level_id + 1)
+        SET current_level_cap = LEAST(18, GREATEST(current_level_cap, p_level_id + 1))
         WHERE id = v_user_id
         RETURNING current_level_cap INTO v_new_level_cap;
 
         RETURN jsonb_build_object('status', 'unlocked', 'new_level', v_new_level_cap);
+    ELSIF v_on_time AND NOT v_no_errors THEN
+        -- Case 2: Passes with errors and on time -> no upgrade, no downgrade
+        SELECT current_level_cap INTO v_new_level_cap FROM public.users WHERE id = v_user_id;
+
+        RETURN jsonb_build_object('status', 'maintained', 'new_level', v_new_level_cap);
     ELSE
-        RETURN jsonb_build_object('status', 'locked');
+        -- Case 3 and 4: Not on time -> downgrade level cap minimum 1
+        UPDATE public.users
+        SET current_level_cap = GREATEST(1, current_level_cap - 1)
+        WHERE id = v_user_id AND current_level_cap >= p_level_id
+        RETURNING current_level_cap INTO v_new_level_cap;
+
+        RETURN jsonb_build_object('status', 'downgraded', 'new_level', COALESCE(v_new_level_cap, 1));
     END IF;
 END;
 $$;

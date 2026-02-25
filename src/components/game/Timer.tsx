@@ -18,7 +18,7 @@ export function Timer() {
 
             if (remaining === 0) {
                 clearInterval(interval)
-                // Auto-submit or trigger failure state here later
+                useGameStore.getState().forceTimeout()
             }
         }, 1000)
 

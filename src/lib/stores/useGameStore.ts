@@ -48,16 +48,17 @@ export interface GameState {
     pauseGame: () => void
     resumeGame: () => void
     resetGame: () => void
+    forceTimeout: () => void
 }
 
-export const useGameStore = create<GameState>((set) => ({
+export const useGameStore = create<GameState>((set, get) => ({
     session: {
         level: 1,
         status: "IDLE",
         startTime: null,
         config: {
-            timeLimit: 120,
-            baseQuestionCount: 10
+            timeLimit: 100,
+            baseQuestionCount: 5
         }
     },
     gameplay: {
@@ -77,7 +78,7 @@ export const useGameStore = create<GameState>((set) => ({
             status: "PLAYING",
             startTime: Date.now(),
             config: {
-                timeLimit: 120, // Default 2 mins per level for MVP
+                timeLimit: 100, // 3 mins per level (5 verbs)
                 baseQuestionCount: questions.length
             }
         },
@@ -185,7 +186,7 @@ export const useGameStore = create<GameState>((set) => ({
             level: 1,
             status: "IDLE",
             startTime: null,
-            config: { timeLimit: 120, baseQuestionCount: 10 }
+            config: { timeLimit: 100, baseQuestionCount: 5 }
         },
         gameplay: {
             currentQuestionIndex: 0,
@@ -197,5 +198,27 @@ export const useGameStore = create<GameState>((set) => ({
             feedbackState: "NONE",
             feedbackTarget: null
         }
-    })
+    }),
+
+    forceTimeout: async () => {
+        const state = get()
+        if (state.session.status !== "PLAYING") return
+
+        if (state.session.startTime) {
+            // Wait for DB failure sync to complete before allowing user to click Continue
+            await submitLevelAttempt({
+                levelId: state.session.level,
+                startTime: new Date(state.session.startTime).toISOString(),
+                endTime: new Date(state.session.startTime + (state.session.config.timeLimit + 1) * 1000).toISOString(),
+                errorCount: state.gameplay.errorsInLevel + 1, // Add an error to ensure it is not perfect
+                questionsCount: state.gameplay.mainQueue.length
+            })
+        }
+
+        set((state) => ({
+            session: { ...state.session, status: "FINISHED" },
+            // Add a massive error so the UI knows it was a timeout fail
+            gameplay: { ...state.gameplay, errorsInLevel: state.gameplay.errorsInLevel + 999 }
+        }))
+    }
 }))
