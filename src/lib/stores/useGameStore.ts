@@ -38,6 +38,7 @@ export interface GameState {
         errorsInLevel: number
         feedbackState: "NONE" | "CORRECT" | "INCORRECT"
         feedbackTarget: string | null
+        topScores: any[]
     }
 
     // Actions
@@ -49,6 +50,8 @@ export interface GameState {
     resumeGame: () => void
     resetGame: () => void
     forceTimeout: () => void
+    cancelGame: () => void
+    setTopScores: (scores: any[]) => void
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -57,7 +60,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         status: "IDLE",
         startTime: null,
         config: {
-            timeLimit: 100,
+            timeLimit: 180,
             baseQuestionCount: 5
         }
     },
@@ -69,7 +72,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         currentInput: "",
         errorsInLevel: 0,
         feedbackState: "NONE",
-        feedbackTarget: null
+        feedbackTarget: null,
+        topScores: []
     },
 
     startGame: (level, questions) => set({
@@ -78,7 +82,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             status: "PLAYING",
             startTime: Date.now(),
             config: {
-                timeLimit: 100, // 3 mins per level (5 verbs)
+                timeLimit: 180, // 3 mins per level (5 verbs)
                 baseQuestionCount: questions.length
             }
         },
@@ -90,7 +94,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             currentInput: "",
             errorsInLevel: 0,
             feedbackState: "NONE",
-            feedbackTarget: null
+            feedbackTarget: null,
+            topScores: []
         }
     }),
 
@@ -155,6 +160,10 @@ export const useGameStore = create<GameState>((set, get) => ({
                 endTime: new Date().toISOString(),
                 errorCount: state.gameplay.errorsInLevel,
                 questionsCount: state.gameplay.mainQueue.length
+            }).then(res => {
+                if (res.success && res.topScores) {
+                    get().setTopScores(res.topScores)
+                }
             })
         }
 
@@ -186,7 +195,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             level: 1,
             status: "IDLE",
             startTime: null,
-            config: { timeLimit: 100, baseQuestionCount: 5 }
+            config: { timeLimit: 180, baseQuestionCount: 5 }
         },
         gameplay: {
             currentQuestionIndex: 0,
@@ -196,9 +205,29 @@ export const useGameStore = create<GameState>((set, get) => ({
             currentInput: "",
             errorsInLevel: 0,
             feedbackState: "NONE",
-            feedbackTarget: null
+            feedbackTarget: null,
+            topScores: []
         }
     }),
+
+    cancelGame: () => set((state) => ({
+        session: { ...state.session, status: "IDLE", startTime: null },
+        gameplay: {
+            currentQuestionIndex: 0,
+            mainQueue: [],
+            retryQueue: [],
+            history: [],
+            currentInput: "",
+            errorsInLevel: 0,
+            feedbackState: "NONE",
+            feedbackTarget: null,
+            topScores: []
+        }
+    })),
+
+    setTopScores: (scores) => set((state) => ({
+        gameplay: { ...state.gameplay, topScores: scores }
+    })),
 
     forceTimeout: async () => {
         const state = get()

@@ -5,7 +5,6 @@ import { useGameStore } from './lib/stores/useGameStore'
 import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
-import { MockDashboard } from './components/game/MockDashboard'
 import { Button } from './components/ui/Button'
 import { Play, LogOut, User as UserIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from './lib/utils/cn'
@@ -14,11 +13,12 @@ import { useVerbs } from './lib/hooks/useVerbs'
 import { useProfile } from './lib/hooks/useProfile'
 
 function GameBoard() {
-  const { session, gameplay, startGame } = useGameStore()
+  const { session, gameplay, startGame, cancelGame } = useGameStore()
   const { user, signOut } = useAuth()
 
   const { levelCap, isLoadingProfile } = useProfile()
   const [selectedLevel, setSelectedLevel] = useState<number>(1)
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
   // Sync selected level to max unlocked level when profile initially loads
   useEffect(() => {
@@ -138,6 +138,30 @@ function GameBoard() {
             </div>
           )}
 
+          {/* Cancel Modal (Overlay over PLAYING area) */}
+          {showCancelModal && session.status === 'PLAYING' && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm -mx-4 md:-mx-8">
+              <div className="bg-slate-800 border border-slate-700 shadow-2xl rounded-2xl p-6 text-center max-w-sm w-full animate-in zoom-in-95 duration-200">
+                <h3 className="text-2xl font-black text-rose-500 mb-2">Give Up?</h3>
+                <p className="text-slate-300 mb-6">Are you sure you want to cancel the current run? No progress or errors will be recorded, but you will lose this attempt.</p>
+                <div className="flex gap-4 justify-center">
+                  <Button variant="outline" onClick={() => setShowCancelModal(false)}>
+                    Keep Playing
+                  </Button>
+                  <Button
+                    className="bg-rose-600 hover:bg-rose-500 text-white border-transparent"
+                    onClick={() => {
+                      setShowCancelModal(false)
+                      cancelGame()
+                    }}
+                  >
+                    Yes, Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {session.status === 'PLAYING' && currentQ && (
             <div className="w-full flex-1 flex flex-col items-center justify-center gap-12 animate-in zoom-in-95 duration-500">
               {/* Question Card */}
@@ -179,37 +203,45 @@ function GameBoard() {
                   {gameplay.feedbackState === 'NONE' && <div className="h-10 w-1 bg-blue-500 ml-1 animate-pulse" />}
                 </div>
               </div>
+
+              {/* Cancel Button (Middle Area) */}
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="mt-2 text-sm font-bold text-slate-500 hover:text-rose-400 transition-colors underline underline-offset-4 decoration-slate-700 hover:decoration-rose-400/50"
+              >
+                Cancel Run
+              </button>
             </div>
           )}
 
           {session.status === 'FINISHED' && (
-            <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-700">
+            <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-700 w-full">
               {gameplay.errorsInLevel === 0 && session.level === 18 ? (
                 <div className="flex flex-col items-center animate-bounce">
-                  <h2 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-emerald-400 to-yellow-300 drop-shadow-[0_0_25px_rgba(252,211,77,0.8)]">
+                  <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-emerald-400 to-yellow-300 drop-shadow-[0_0_15px_rgba(252,211,77,0.8)]">
                     🎉 INCREDIBLE! 🎉
                   </h2>
-                  <p className="text-3xl font-bold mt-4 text-emerald-300 drop-shadow-md">YOU MASTERED ALL LEVELS!</p>
+                  <p className="text-xl md:text-2xl font-bold mt-2 text-emerald-300 drop-shadow-sm">YOU MASTERED ALL LEVELS!</p>
                 </div>
               ) : gameplay.errorsInLevel < 100 ? (
-                <h2 className="text-5xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Level Complete!</h2>
+                <h2 className="text-4xl md:text-5xl text-center font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)] leading-tight">Level Complete!</h2>
               ) : (
-                <h2 className="text-5xl font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">Level Failed!</h2>
+                <h2 className="text-4xl md:text-5xl text-center font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)] leading-tight">Level Failed!</h2>
               )}
 
-              <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl text-center space-y-2">
+              <div className="bg-slate-800/80 p-4 md:p-6 rounded-2xl border border-slate-700 shadow-xl text-center space-y-2 max-w-lg w-full">
                 {gameplay.errorsInLevel === 0 ? (
                   session.level === 18 ? (
-                    <p className="text-2xl text-yellow-300 font-bold">Absolutely perfect! A true master of irregular verbs!</p>
+                    <p className="text-xl md:text-2xl text-yellow-300 font-bold">Absolutely perfect! A true master of irregular verbs!</p>
                   ) : session.level < levelCap ? (
-                    <p className="text-xl text-slate-300">Perfect run! Well done practicing.</p>
+                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">Perfect run! Well done practicing.</p>
                   ) : (
-                    <p className="text-xl text-slate-300">Perfect run! You unlocked the next level.</p>
+                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">Perfect run! You unlocked the next level.</p>
                   )
                 ) : gameplay.errorsInLevel < 100 ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xl text-slate-300">Errors made: {gameplay.errorsInLevel}</p>
-                    <p className="text-yellow-400 font-bold">Good job, but you need a perfect run to unlock the next level.</p>
+                  <div className="flex flex-col gap-1.5 md:gap-2">
+                    <p className="text-lg md:text-xl text-slate-300">Errors made: {gameplay.errorsInLevel}</p>
+                    <p className="text-sm md:text-base text-yellow-400 font-bold">Good job, but you need a perfect run to unlock the next level.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
@@ -222,6 +254,58 @@ function GameBoard() {
                   </div>
                 )}
               </div>
+
+              {/* Leaderboard Section */}
+              {gameplay.errorsInLevel < 100 && (
+                <div className="w-full max-w-lg bg-slate-900/60 backdrop-blur border border-slate-700 p-4 md:p-6 rounded-2xl shadow-xl mt-2 md:mt-4">
+                  <h3 className="text-xl md:text-2xl font-black text-emerald-400 mb-3 md:mb-4 text-center uppercase tracking-widest drop-shadow-sm border-b border-slate-700/50 pb-2">Top 3 Times</h3>
+                  {gameplay.topScores.length === 0 ? (
+                    <div className="text-center py-4 text-slate-400 animate-pulse">Loading scores...</div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {gameplay.topScores.slice(0, 3).map((score: any, idx: number) => {
+                        const minutes = Math.floor(score.duration_seconds / 60)
+                        const seconds = score.duration_seconds % 60
+                        const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`
+
+                        // Check if the score is brand new (less than 5 seconds old)
+                        const isNew = new Date().getTime() - new Date(score.completed_at).getTime() < 5000
+
+                        return (
+                          <li key={idx} className={cn(
+                            "flex justify-between items-center p-2 md:p-3 border rounded-lg",
+                            isNew ? "bg-emerald-900/40 border-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.2)] animate-pulse" : "bg-slate-800/50 border-slate-700/50"
+                          )}>
+                            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+                              <div className={cn(
+                                "flex items-center justify-center w-7 h-7 md:w-9 md:h-9 rounded-full font-black text-slate-900 shrink-0 shadow-md",
+                                idx === 0 ? "bg-yellow-400" :
+                                  idx === 1 ? "bg-slate-300" :
+                                    "bg-amber-600 text-white"
+                              )}>
+                                <span className="text-sm md:text-base">{idx + 1}</span>
+                              </div>
+                              <span className="font-mono text-base md:text-xl text-white font-medium pl-1 md:pl-0">{timeString}</span>
+                              {isNew && (
+                                <span className="text-[9px] md:text-[10px] font-black tracking-widest text-emerald-300 bg-emerald-900 px-1.5 py-0.5 rounded-full border border-emerald-500 ml-1 md:ml-2">
+                                  NEW BEST!
+                                </span>
+                              )}
+                            </div>
+                            {score.is_perfect_run && (
+                              <div className="flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full shrink-0">
+                                <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">PERFECT</span>
+                                <span>⭐</span>
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               <Button
                 onClick={() => window.location.reload()}
                 className="mt-4"
@@ -241,9 +325,6 @@ function GameBoard() {
         )}
 
       </main>
-
-      {/* Mock Dev Tools */}
-      <MockDashboard />
     </div>
   )
 }

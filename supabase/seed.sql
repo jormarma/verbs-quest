@@ -141,11 +141,4 @@ INSERT INTO public.verbs (infinitive, past_simple, past_participle, level_group,
 ('win', 'won', 'won', 18, true),
 ('write', 'wrote', 'written', 18, true);
 
--- Mock Data for Testing Event Progressions
-INSERT INTO public.users (id, role, username, current_level_cap) VALUES
-('mock-user-1', 'student', 'Case 1 User', 3),
-('mock-user-2', 'student', 'Case 2 User', 3),
-('mock-user-3', 'student', 'Case 3 User', 3),
-('mock-user-4', 'student', 'Case 4 User', 1),
-('mock-user-5', 'student', 'Case 5 User', 18)
-ON CONFLICT (id) DO NOTHING;
+

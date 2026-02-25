@@ -88,6 +88,10 @@ DECLARE
     v_is_perfect BOOLEAN;
     v_level_time_limit INT := 100; -- 3 minutes
     v_new_level_cap INT;
+    v_on_time BOOLEAN;
+    v_no_errors BOOLEAN;
+    v_status TEXT;
+    v_top_scores JSONB;
 BEGIN
     -- Validation 2 (Identity)
     v_user_id := auth.uid();
@@ -123,12 +127,12 @@ BEGIN
         WHERE id = v_user_id
         RETURNING current_level_cap INTO v_new_level_cap;
 
-        RETURN jsonb_build_object('status', 'unlocked', 'new_level', v_new_level_cap);
+        v_status := 'unlocked';
     ELSIF v_on_time AND NOT v_no_errors THEN
         -- Case 2: Passes with errors and on time -> no upgrade, no downgrade
         SELECT current_level_cap INTO v_new_level_cap FROM public.users WHERE id = v_user_id;
 
-        RETURN jsonb_build_object('status', 'maintained', 'new_level', v_new_level_cap);
+        v_status := 'maintained';
     ELSE
         -- Case 3 and 4: Not on time -> downgrade level cap minimum 1
         UPDATE public.users
@@ -136,8 +140,31 @@ BEGIN
         WHERE id = v_user_id AND current_level_cap >= p_level_id
         RETURNING current_level_cap INTO v_new_level_cap;
 
-        RETURN jsonb_build_object('status', 'downgraded', 'new_level', COALESCE(v_new_level_cap, 1));
+        v_new_level_cap := COALESCE(v_new_level_cap, 1);
+        v_status := 'downgraded';
     END IF;
+
+    -- Query the top 5 scores
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'duration_seconds', t.duration_seconds,
+            'is_perfect_run', t.is_perfect_run,
+            'completed_at', t.completed_at
+        )
+    ) INTO v_top_scores
+    FROM (
+        SELECT duration_seconds, is_perfect_run, completed_at
+        FROM public.game_sessions
+        WHERE user_id = v_user_id AND level_attempted = p_level_id
+        ORDER BY duration_seconds ASC, completed_at DESC
+        LIMIT 5
+    ) t;
+
+    RETURN jsonb_build_object(
+        'status', v_status, 
+        'new_level', v_new_level_cap,
+        'top_scores', COALESCE(v_top_scores, '[]'::jsonb)
+    );
 END;
 $$;
 
