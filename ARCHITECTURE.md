@@ -23,11 +23,11 @@
 ### A. Tables & Relationships
 
 **1. `public.users`**
-* **Purpose:** Local mirror of Clerk identity + Role management.
+* **Purpose:** Local mirror of the `auth.users` identity + Role management.
 * **Columns:**
-    * `id` (text, PK): Matches Clerk User ID strictly.
+    * `id` (uuid, PK): Matches `auth.users.id` strictly via FK.
     * `role` (text): 'student' (default), 'admin', 'teacher'.
-    * `username` (text): Synced from Clerk.
+    * `username` (text): Synced from Auth metadata or generated automatically.
     * `created_at` (timestamp).
     * `current_level_cap` (int): Highest level unlocked (Default: 1).
 
@@ -54,13 +54,12 @@
     * `client_timestamp_start` (timestamp): For anti-cheat validation.
     * `client_timestamp_end` (timestamp): For anti-cheat validation.
 
-### B. The Clerk-to-Supabase Sync (Critical)
-Since Supabase cannot "see" Clerk users by default, we cannot use Foreign Keys without this sync.
+### B. Database Triggers for Profile Sync
+Since Supabase Auth operates in its own secluded schema (`auth`), we use Postgres Triggers to automatically generate and maintain a public profile in `public.users` whenever a user signs up.
 
-1.  **Trigger:** Clerk Webhook (`user.created`).
-2.  **Destination:** Supabase Edge Function (`/functions/v1/clerk-webhook`).
-3.  **Action:** The webhook payload contains the new `userId` and `username`. The function executes a text-to-text insert into `public.users`.
-4.  **Fallback:** On the frontend, if a user logs in and the `public.users` record is missing (rare race condition), the client triggers a "Self-Heal" RPC call to insert their own record before starting the game.
+1. **Trigger:** `on_auth_user_created`
+2. **Action:** Executes a PL/pgSQL function (`handle_new_user`) that intercepts the new user's UUID from `auth.users` and inserts a default 'student' row into `public.users`.
+3. **Benefits:** Eliminates the need for external webhooks, edge functions, and "self-healing" frontend fallbacks. The profile is guaranteed to exist the moment they authenticate.
 
 ---
 
@@ -138,7 +137,7 @@ Scalable "Feature-Sliced" structure for Vite.
     /game           # Game-specific UI (VirtualKeyboard, Timer)
     /3d             # R3F components (Scene, Avatar, Lights)
   /features
-    /auth           # Clerk wrappers, ProtectRoute components
+    /auth           # Supabase Auth wrappers, Login UI, ProtectRoute components
     /dashboard      # Admin charts, tables
     /game-engine    # The core logic (State machine, Validation)
   /lib

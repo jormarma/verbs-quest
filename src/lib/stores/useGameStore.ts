@@ -5,6 +5,9 @@ export type GameStatus = "IDLE" | "PLAYING" | "PAUSED" | "FINISHED"
 
 export interface VerbQuestion {
     verbId: string
+    infinitive: string
+    pastSimple: string
+    pastParticiple: string
     tense: "PAST_SIMPLE" | "PAST_PARTICIPLE"
     target: string
 }

@@ -25,11 +25,9 @@ export function VirtualKeyboard() {
     const dynamicConsonants = useMemo(() => {
         if (!currentQ) return []
 
-        // Since our mock only explicitly has verbId and target, normally we'd look up the full verb row here.
-        // For this prototype, we'll extract consonants from the current target and the mocked verb infinitive.
-        const infinitive = currentQ.verbId === '1' ? 'GO' : currentQ.verbId === '2' ? 'EAT' : 'SEE'
-        const pastSimple = currentQ.verbId === '1' ? 'WENT' : currentQ.verbId === '2' ? 'ATE' : 'SAW'
-        const pastParticiple = currentQ.verbId === '1' ? 'GONE' : currentQ.verbId === '2' ? 'EATEN' : 'SEEN'
+        const infinitive = currentQ.infinitive || ''
+        const pastSimple = currentQ.pastSimple || ''
+        const pastParticiple = currentQ.pastParticiple || ''
 
         const allNeededLetters = (infinitive + pastSimple + pastParticiple).toUpperCase().split('')
         const neededConsonants = Array.from(new Set(allNeededLetters.filter(char => !VOWELS.includes(char))))
@@ -78,41 +76,49 @@ export function VirtualKeyboard() {
     }, [feedbackState, advanceQuestion])
 
     return (
-        <div className="w-full max-w-3xl mx-auto p-4 bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-700 shadow-2xl space-y-4">
+        <div className="relative w-full max-w-3xl mx-auto p-3 bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col justify-center">
 
-            {/* Visual Feedback Banner */}
+            {/* Visual Feedback Overlay (Absolute) */}
             <div className={cn(
-                "w-full h-16 rounded-xl flex items-center justify-center font-bold text-xl md:text-2xl transition-all duration-300",
-                feedbackState === 'NONE' ? "opacity-0 h-0 overflow-hidden" : "opacity-100",
-                feedbackState === 'CORRECT' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-in fade-in zoom-in" : "",
-                feedbackState === 'INCORRECT' ? "bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-in fade-in slide-in-from-bottom-2" : ""
+                "absolute inset-0 z-20 flex flex-col items-center justify-center p-4 gap-4 transition-all duration-300 backdrop-blur-sm",
+                feedbackState === 'NONE' ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0",
+                feedbackState === 'CORRECT' ? "bg-emerald-950/90 border border-emerald-500/50" : "bg-red-950/90 border border-red-500/50"
             )}>
                 {feedbackState === 'CORRECT' && (
-                    <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-8 h-8" />
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-2xl md:text-3xl animate-in zoom-in">
+                        <CheckCircle2 className="w-8 h-8 md:w-10 md:h-10" />
                         <span>CORRECT!</span>
                     </div>
                 )}
                 {feedbackState === 'INCORRECT' && (
-                    <div className="flex items-center gap-2">
-                        <XCircle className="w-8 h-8" />
-                        <span>INCORRECT! Right answer: <span className="font-mono bg-red-900/50 px-2 py-1 rounded text-white ml-2">{feedbackTarget}</span></span>
+                    <div className="flex flex-col items-center gap-2 text-xl md:text-2xl font-bold animate-in slide-in-from-bottom-2">
+                        <div className="flex items-center gap-2 text-red-400">
+                            <XCircle className="w-8 h-8 md:w-10 md:h-10" />
+                            <span>INCORRECT!</span>
+                        </div>
+                        <span className="text-slate-300 text-lg">Right answer: <span className="font-mono bg-red-900/50 px-3 py-1 rounded text-white ml-2 border border-red-500/30">{feedbackTarget}</span></span>
                     </div>
                 )}
+                <Button
+                    className="w-full max-w-sm h-14 mt-4 text-lg font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] animate-bounce"
+                    onClick={advanceQuestion}
+                >
+                    NEXT QUESTION
+                </Button>
             </div>
 
             {/* Keyboard Grid */}
             <div className={cn(
-                "flex flex-col gap-2 transition-opacity duration-300",
-                feedbackState !== 'NONE' && "opacity-50 pointer-events-none grayscale"
+                "flex flex-col gap-2 w-full transition-opacity duration-300",
+                feedbackState !== 'NONE' && "opacity-0 pointer-events-none"
             )}>
                 {/* Row 1: Vowels */}
-                <div className="flex justify-center gap-2">
+                <div className="flex justify-center gap-1.5 sm:gap-2">
                     {VOWELS.map((key) => (
                         <Button
                             key={key}
                             variant="outline"
-                            className="w-12 h-14 sm:w-16 sm:h-16 text-xl sm:text-2xl font-bold bg-indigo-900/40 border-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:border-indigo-400 hover:scale-105 transition-all shadow-md"
+                            className="w-10 h-14 sm:w-14 sm:h-16 text-lg sm:text-2xl font-bold bg-indigo-900/40 border-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:border-indigo-400 transition-all shadow-md px-0"
                             onClick={() => handleKeyPress(key)}
                         >
                             {key}
@@ -120,13 +126,13 @@ export function VirtualKeyboard() {
                     ))}
                 </div>
 
-                {/* Row 2: Dynamic Consonants + Controls */}
-                <div className="flex justify-center flex-wrap gap-2 mt-2">
+                {/* Row 2: Dynamic Consonants */}
+                <div className="flex justify-center gap-1 sm:gap-1.5 mt-2">
                     {dynamicConsonants.map((key) => (
                         <Button
                             key={key}
                             variant="outline"
-                            className="w-12 h-14 sm:w-14 sm:h-16 text-lg sm:text-2xl font-bold bg-slate-800/80 border-slate-600 text-slate-100 hover:bg-slate-600 hover:border-slate-400 hover:scale-105 transition-all shadow-md"
+                            className="flex-1 max-w-[3rem] min-w-0 px-0 h-12 sm:h-14 text-base sm:text-xl font-bold bg-slate-800/80 border-slate-600 text-slate-100 hover:bg-slate-600 hover:border-slate-400 transition-all shadow-md active:scale-95"
                             onClick={() => handleKeyPress(key)}
                         >
                             {key}
@@ -135,35 +141,24 @@ export function VirtualKeyboard() {
                 </div>
 
                 {/* Row 3: Controls */}
-                <div className="flex justify-center gap-4 mt-2">
+                <div className="flex justify-center gap-2 sm:gap-4 mt-2">
                     <Button
                         variant="destructive"
-                        size="lg"
-                        className="h-14 sm:h-16 flex-1 max-w-[120px]"
+                        className="h-12 sm:h-14 flex-[0.3] max-w-[100px] bg-slate-700 hover:bg-red-600 border-none"
                         onClick={handleDelete}
                     >
-                        <Delete size={24} />
+                        <Delete size={20} className="sm:w-6 sm:h-6" />
                     </Button>
                     <Button
                         variant="secondary"
-                        size="lg"
                         onClick={handleEnter}
-                        disabled={currentInput.trim().length === 0 && feedbackState === 'NONE'}
-                        className="h-14 sm:h-16 flex-1 max-w-[200px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white border-none disabled:bg-emerald-900/50"
+                        disabled={currentInput.trim().length === 0}
+                        className="h-12 sm:h-14 flex-[0.7] max-w-[250px] font-bold text-base sm:text-lg bg-emerald-600 hover:bg-emerald-500 text-white border-none disabled:bg-emerald-900/30 disabled:text-emerald-700/50"
                     >
                         ENTER
                     </Button>
                 </div>
             </div>
-
-            {feedbackState !== 'NONE' && (
-                <Button
-                    className="w-full h-14 text-lg font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] animate-bounce"
-                    onClick={advanceQuestion}
-                >
-                    NEXT QUESTION
-                </Button>
-            )}
         </div>
     )
 }

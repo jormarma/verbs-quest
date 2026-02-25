@@ -1,21 +1,21 @@
 import { AuthProvider } from './features/auth/AuthProvider'
+import { useAuth } from './features/auth/AuthContext'
 import { useGameStore } from './lib/stores/useGameStore'
 import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { Play } from 'lucide-react'
+import { Play, LogOut, User as UserIcon } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
-// Dummy Data for testing Phase 4
-const MOCK_LEVEL_1_VERBS = [
-  { verbId: '1', tense: 'PAST_SIMPLE' as const, target: 'WENT' },
-  { verbId: '2', tense: 'PAST_PARTICIPLE' as const, target: 'EATEN' },
-  { verbId: '3', tense: 'PAST_SIMPLE' as const, target: 'SAW' }
-]
+import { useVerbs } from './lib/hooks/useVerbs'
 
 function GameBoard() {
   const { session, gameplay, startGame } = useGameStore()
+  const { user, signOut } = useAuth()
+
+  const levelToPlay = user?.user_metadata?.current_level_cap || 1
+  const { questions, isLoading, error } = useVerbs(levelToPlay)
 
   // Derived state to show current question
   const isMainQueue = gameplay.currentQuestionIndex < gameplay.mainQueue.length
@@ -34,12 +34,38 @@ function GameBoard() {
       <main className="z-10 flex-1 flex flex-col p-4 md:p-8">
 
         {/* Top Header / HUD */}
-        <header className="flex justify-between items-center w-full max-w-5xl mx-auto">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
-            VERBS QUEST
-          </h1>
+        <header className="flex flex-col w-full max-w-5xl mx-auto gap-4 mb-4">
+          {/* Logo centered at the top */}
+          <div className="flex justify-center w-full">
+            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
+              VERBS QUEST
+            </h1>
+          </div>
 
-          {session.status === 'PLAYING' && <Timer />}
+          {/* Sub-header with User on the right, Timer on the left if playing */}
+          <div className="flex justify-between items-center w-full h-10">
+            <div className="flex items-center">
+              {session.status === 'PLAYING' && <Timer />}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {user && (
+                <div className="flex items-center gap-1.5 bg-slate-800/80 backdrop-blur px-3 py-1.5 rounded-full border border-slate-700/50 shadow-sm animate-in fade-in slide-in-from-top-2">
+                  <UserIcon className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                  <span className="font-bold text-slate-200 text-xs md:text-sm tracking-wide truncate max-w-[80px] sm:max-w-[150px]">
+                    {user.user_metadata?.full_name || 'Player'}
+                  </span>
+                  <button
+                    onClick={signOut}
+                    className="ml-1 text-slate-400 hover:text-red-400 transition-colors p-1 rounded-full hover:bg-slate-700/50 flex-shrink-0"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         {/* Center Stage */}
@@ -48,15 +74,17 @@ function GameBoard() {
           {session.status === 'IDLE' && (
             <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
               <div className="text-center space-y-2">
-                <h2 className="text-4xl md:text-6xl font-black drop-shadow-lg text-white">Ready for Level 1?</h2>
+                <h2 className="text-4xl md:text-6xl font-black drop-shadow-lg text-white">Ready for Level {levelToPlay}?</h2>
                 <p className="text-lg text-blue-200/80">Identify the correct past forms of the verbs.</p>
+                {error && <p className="text-red-400 font-bold mt-2">Error loading verbs: {error}</p>}
               </div>
               <Button
                 size="lg"
-                className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50"
-                onClick={() => startGame(1, MOCK_LEVEL_1_VERBS)}
+                disabled={isLoading || questions.length === 0}
+                className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center"
+                onClick={() => startGame(levelToPlay, questions)}
               >
-                <Play className="mr-3 h-8 w-8" /> Start Quest
+                <Play className="mr-3 h-8 w-8" /> {isLoading ? 'Loading...' : 'Start Quest'}
               </Button>
             </div>
           )}
@@ -68,9 +96,9 @@ function GameBoard() {
                 <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 text-sm font-bold uppercase tracking-widest shadow-inner">
                   {currentQ.tense.replace('_', ' ')}
                 </div>
-                {/* For mock purposes, using target as hint. Real app would lookup 'infinitive' from verbs table */}
-                <h2 className="text-5xl md:text-7xl font-black text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] tracking-tight">
-                  {currentQ.verbId === '1' ? 'GO' : currentQ.verbId === '2' ? 'EAT' : 'SEE'}
+                {/* Prompting the player with the infinitive loaded directly from Supabase */}
+                <h2 className="text-5xl md:text-7xl font-black text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] tracking-tight uppercase">
+                  {currentQ.infinitive}
                 </h2>
               </div>
 
