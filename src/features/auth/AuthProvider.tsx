@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase/client'
 import { Button } from '../../components/ui/Button'
+import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher'
 import { AuthContext } from './AuthContext'
 import { Swords, BookOpen } from 'lucide-react'
 import { Scene } from '../../components/3d/Scene'
@@ -168,7 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     </header>
 
                     <div className="flex-1 flex items-center justify-center -mt-8 sm:-mt-16">
-                        <div className="max-w-md w-full bg-slate-800/90 backdrop-blur p-6 sm:px-8 py-6 rounded-2xl border border-slate-700 shadow-2xl">
+                        <div className="max-w-md w-full p-6 sm:px-8 py-6 rounded-2xl bg-transparent border border-transparent shadow-none">
+                            <div className="flex justify-end mb-3">
+                                <LanguageSwitcher />
+                            </div>
                             <form onSubmit={handleAuth} className="space-y-4" autoComplete="off">
                                 {authError && (
                                     <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { useAuth } from './features/auth/AuthContext'
 import { useGameStore } from './lib/stores/useGameStore'
@@ -41,7 +41,13 @@ function GameBoard() {
 
   const levelToPlay = selectedLevel
   const { questions, isLoading, error } = useVerbs(levelToPlay)
+  const lessonVerbs = useMemo(
+    () => Array.from(new Set(questions.map((q) => q.infinitive))).sort((a, b) => a.localeCompare(b)),
+    [questions]
+  )
   const isLeaderboardLobby = session.status === 'IDLE' && lobbyView === 'leaderboard'
+  const isPlayLobby = session.status === 'IDLE' && lobbyView === 'play'
+  const isViewportLockedLobby = isLeaderboardLobby || isPlayLobby
 
   useEffect(() => {
     if (countdown === null) return
@@ -102,7 +108,7 @@ function GameBoard() {
       <main
         className={cn(
           "z-10 flex-1 min-h-0",
-          isLeaderboardLobby
+          isViewportLockedLobby
             ? "grid grid-rows-[auto_minmax(0,1fr)] gap-2 sm:gap-3 p-3 md:p-4 overflow-hidden"
             : "flex flex-col p-4 md:p-8"
         )}
@@ -111,7 +117,7 @@ function GameBoard() {
         {/* Top Header / HUD */}
         <header className={cn(
           "flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4",
-          isLeaderboardLobby ? "mb-0" : "mb-2 sm:mb-4"
+          isViewportLockedLobby ? "mb-0" : "mb-2 sm:mb-4"
         )}>
           {/* Logo centered at the top */}
           <div className="flex flex-col items-center w-full">
@@ -169,93 +175,105 @@ function GameBoard() {
         {/* Center Stage */}
         <section className={cn(
           "flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto",
-          isLeaderboardLobby ? "items-stretch justify-start my-0 overflow-hidden" : "items-center justify-center my-2 sm:my-8"
+          isViewportLockedLobby ? "items-stretch justify-start my-0 overflow-hidden" : "items-center justify-center my-2 sm:my-8"
         )}>
 
           {session.status === 'IDLE' && (
             <>
               {lobbyView === 'menu' && (
-                <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-md px-4">
-                  <h2 className="text-2xl sm:text-3xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent text-center">
-                    {t('home.choose_mode')}
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                <div className="flex-1 min-h-0 flex items-center justify-center animate-in fade-in slide-in-from-bottom-8 duration-700 w-full">
+                  <div className="w-full max-w-md px-4 flex flex-col items-center">
+                    <div className="w-full flex flex-col gap-5 items-center">
                     <Button
                       size="lg"
                       variant="default"
-                      className="h-16 text-lg font-bold flex items-center justify-center gap-2"
-                      onClick={() => setLobbyView('play')}
-                    >
-                      <Play className="w-5 h-5" />
-                      {t('home.play')}
-                    </Button>
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="h-16 text-lg font-bold flex items-center justify-center gap-2"
+                      className="w-full max-w-[280px] h-16 text-lg font-bold flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 hover:shadow-emerald-500/50"
                       onClick={() => setLobbyView('leaderboard')}
                     >
                       <Trophy className="w-5 h-5" />
                       {t('home.leaderboard')}
                     </Button>
+                    <Button
+                      size="lg"
+                      variant="default"
+                      className="w-full max-w-[280px] h-16 text-lg font-bold flex items-center justify-center gap-2"
+                      onClick={() => setLobbyView('play')}
+                    >
+                      <Play className="w-5 h-5" />
+                      {t('home.play')}
+                    </Button>
+                    </div>
                   </div>
                 </div>
               )}
 
               {lobbyView === 'play' && (
-                <div className="flex flex-col items-center gap-3 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-md sm:max-w-2xl px-2 sm:px-4">
-                  <div className="w-full flex justify-start">
-                    <Button variant="ghost" className="text-slate-300 hover:text-white" onClick={() => setLobbyView('menu')}>
-                      <ArrowLeft className="w-4 h-4 mr-1" />
-                      {t('home.back')}
-                    </Button>
-                  </div>
-                  <div className="text-center space-y-2 sm:space-y-4 w-full">
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">{t('quest.levels')}</h2>
+                <div className="w-full h-full min-h-0 max-w-md sm:max-w-2xl mx-auto px-2 sm:px-4 grid grid-rows-[minmax(0,1fr)_auto] gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                  <div className="min-h-0 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="min-h-full flex flex-col justify-center">
+                      <div className="text-center space-y-2 sm:space-y-4 w-full">
+                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">{t('quest.levels')}</h2>
 
-                    <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full">
-                      {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
-                        const isLocked = lvl > levelCap
-                        const isHighestUnlocked = lvl === levelCap
-                        const isSelected = lvl === selectedLevel
+                      <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full px-2 sm:px-3">
+                          {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
+                            const isLocked = lvl > levelCap
+                            const isHighestUnlocked = lvl === levelCap
+                            const isSelected = lvl === selectedLevel
 
-                        return (
-                          <button
-                            key={lvl}
-                            disabled={isLocked || isLoading}
-                            onClick={() => handleLevelClick(lvl)}
-                            className={cn(
-                              "relative flex flex-col items-center justify-center aspect-square rounded-md transition-all duration-300 border-2 overflow-hidden shadow-sm group",
-                              isLocked ? "bg-slate-800 opacity-50 text-slate-500 border-slate-700 pointer-events-none" :
-                                isHighestUnlocked ? "bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] hover:-translate-y-1 hover:shadow-lg" :
-                                  "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:-translate-y-1 hover:shadow-lg active:scale-95",
-                              isSelected && !isLocked && "ring-4 ring-offset-2 ring-offset-slate-900 ring-white scale-105 border-transparent!"
-                            )}
-                          >
-                            {isHighestUnlocked && (
-                              <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-colors pointer-events-none" />
-                            )}
-                            <span className="font-black text-xl sm:text-2xl md:text-3xl z-10">{lvl}</span>
-                          </button>
-                        )
-                      })}
+                            return (
+                              <button
+                                key={lvl}
+                                disabled={isLocked || isLoading}
+                                onClick={() => handleLevelClick(lvl)}
+                                className={cn(
+                                  "relative flex flex-col items-center justify-center aspect-square rounded-md transition-all duration-300 border-2 overflow-hidden shadow-sm group",
+                                  isLocked ? "bg-slate-800 opacity-50 text-slate-500 border-slate-700 pointer-events-none" :
+                                    isHighestUnlocked ? "bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] hover:-translate-y-1 hover:shadow-lg" :
+                                      "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:-translate-y-1 hover:shadow-lg active:scale-95",
+                                  isSelected && !isLocked && "ring-4 ring-offset-2 ring-offset-slate-900 ring-white scale-105 border-transparent!"
+                                )}
+                              >
+                                {isHighestUnlocked && (
+                                  <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-colors pointer-events-none" />
+                                )}
+                                <span className="font-black text-xl sm:text-2xl md:text-3xl z-10">{lvl}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        <p className="text-sm sm:text-base text-blue-200/90 mt-6 sm:mt-8 font-semibold italic uppercase tracking-wide text-center leading-relaxed">
+                          {isLoading
+                            ? t('quest.loading')
+                            : lessonVerbs.length > 0
+                              ? lessonVerbs.join(', ').toUpperCase()
+                              : t('quest.no_verbs')}
+                        </p>
+
+                        {error && <p className="text-red-400 font-bold mt-2">{t('error.loading_verbs', { error })}</p>}
+                      </div>
                     </div>
-
-                    <p className="text-base sm:text-lg text-blue-200/80 mt-3 sm:mt-6 font-medium">{t('quest.tap_unlocked')}</p>
-
-                    {error && <p className="text-red-400 font-bold mt-2">{t('error.loading_verbs', { error })}</p>}
                   </div>
 
-                  <div className="flex flex-col items-center mt-1 sm:mt-2 w-full">
-                    <Button
-                      size="lg"
-                      variant="default"
-                      disabled={isLoading || questions.length === 0}
-                      className="text-lg sm:text-xl px-8 py-4 sm:px-12 sm:py-8 flex items-center"
-                      onClick={handleStartQuest}
-                    >
-                      {isLoading ? t('quest.loading') : t('quest.start')}
-                    </Button>
+                  <div className="w-full flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+                    <div className="w-full max-w-md flex items-center justify-center gap-3">
+                      <Button
+                        variant="destructive"
+                        className="h-12 sm:h-14 flex-1 font-bold text-base sm:text-lg"
+                        onClick={() => setLobbyView('menu')}
+                      >
+                        <ArrowLeft className="w-4 h-4 mr-1" />
+                        {t('home.back')}
+                      </Button>
+                      <Button
+                        variant="default"
+                        disabled={isLoading || questions.length === 0}
+                        className="h-12 sm:h-14 flex-1 font-bold text-base sm:text-lg"
+                        onClick={handleStartQuest}
+                      >
+                        {isLoading ? t('quest.loading') : t('quest.start')}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
