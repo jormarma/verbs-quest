@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase/client'
 import { Button } from '../../components/ui/Button'
 import { AuthContext } from './AuthContext'
 import { Swords, BookOpen } from 'lucide-react'
+import { Scene } from '../../components/3d/Scene'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [session, setSession] = useState<Session | null>(null)
@@ -118,103 +119,106 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Render Auth Gates if no session exists natively
     if (!session) {
         return (
-            <div className="min-h-screen bg-slate-900 flex flex-col p-4 md:p-8 relative z-50">
-                {/* Header matching the app */}
-                <header className="flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4 mb-2 sm:mb-4">
-                    <div className="flex flex-col items-center w-full">
-                        <div className="flex items-center gap-3 sm:gap-4">
-                            <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-400" strokeWidth={2.5} />
-                            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
-                                VERBS QUEST
-                            </h1>
-                            <Swords className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-emerald-400" strokeWidth={2.5} />
+            <div className="relative min-h-screen w-full overflow-hidden text-slate-100">
+                <Scene />
+                <div className="relative z-10 flex min-h-screen flex-col p-4 md:p-8">
+                    {/* Header matching the app */}
+                    <header className="flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4 mb-2 sm:mb-4">
+                        <div className="flex flex-col items-center w-full">
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-400" strokeWidth={2.5} />
+                                <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
+                                    VERBS QUEST
+                                </h1>
+                                <Swords className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-emerald-400" strokeWidth={2.5} />
+                            </div>
+                            <p className="mt-2 text-slate-300 font-semibold text-center text-sm sm:text-lg max-w-lg">
+                                Master English irregular verbs<br />through an epic adventure!
+                            </p>
                         </div>
-                        <p className="mt-2 text-slate-300 font-semibold text-center text-sm sm:text-lg max-w-lg">
-                            Master English irregular verbs<br />through an epic adventure!
-                        </p>
-                    </div>
-                </header>
+                    </header>
 
-                <div className="flex-1 flex items-center justify-center -mt-8 sm:-mt-16">
-                    <div className="max-w-md w-full bg-slate-800/90 backdrop-blur p-6 sm:px-8 py-6 rounded-2xl border border-slate-700 shadow-2xl">
-                        <form onSubmit={handleAuth} className="space-y-4">
-                            {authError && (
-                                <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
-                                    {authError}
+                    <div className="flex-1 flex items-center justify-center -mt-8 sm:-mt-16">
+                        <div className="max-w-md w-full bg-slate-800/90 backdrop-blur p-6 sm:px-8 py-6 rounded-2xl border border-slate-700 shadow-2xl">
+                            <form onSubmit={handleAuth} className="space-y-4">
+                                {authError && (
+                                    <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
+                                        {authError}
+                                    </div>
+                                )}
+
+                                <div className="space-y-1 text-left">
+                                    <label className="text-sm font-medium text-slate-300">Username</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        minLength={3}
+                                        maxLength={12}
+                                        pattern="^[a-zA-Z0-9_]+$"
+                                        title="Only letters, numbers, and underscores are allowed"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        placeholder="Player123"
+                                        className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
+                                    />
                                 </div>
-                            )}
-
-                            <div className="space-y-1 text-left">
-                                <label className="text-sm font-medium text-slate-300">Username</label>
-                                <input
-                                    type="text"
-                                    required
-                                    minLength={3}
-                                    maxLength={12}
-                                    pattern="^[a-zA-Z0-9_]+$"
-                                    title="Only letters, numbers, and underscores are allowed"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    placeholder="Player123"
-                                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                                />
-                            </div>
-                            <div className="space-y-1 text-left">
-                                <label className="text-sm font-medium text-slate-300">Password</label>
-                                <input
-                                    type="password"
-                                    required
-                                    minLength={6}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                                />
-                            </div>
-
-                            {isRegistering && (
-                                <div className="space-y-1 text-left animate-in fade-in slide-in-from-top-1">
-                                    <label className="text-sm font-medium text-slate-300">Repeat Password</label>
+                                <div className="space-y-1 text-left">
+                                    <label className="text-sm font-medium text-slate-300">Password</label>
                                     <input
                                         type="password"
                                         required
                                         minLength={6}
-                                        value={repeatPassword}
-                                        onChange={(e) => {
-                                            setRepeatPassword(e.target.value)
-                                            if (authError === 'Passwords do not match.') {
-                                                setAuthError('')
-                                            }
-                                        }}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
                                         className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
                                     />
                                 </div>
-                            )}
 
-                            <div className="flex justify-center pt-2">
-                                <Button
-                                    type="submit"
-                                    variant="default"
-                                    disabled={isLoadingAuth}
-                                    className="w-fit min-w-[140px] mt-2 h-11 text-base sm:text-lg font-bold"
+                                {isRegistering && (
+                                    <div className="space-y-1 text-left animate-in fade-in slide-in-from-top-1">
+                                        <label className="text-sm font-medium text-slate-300">Repeat Password</label>
+                                        <input
+                                            type="password"
+                                            required
+                                            minLength={6}
+                                            value={repeatPassword}
+                                            onChange={(e) => {
+                                                setRepeatPassword(e.target.value)
+                                                if (authError === 'Passwords do not match.') {
+                                                    setAuthError('')
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="flex justify-center pt-2">
+                                    <Button
+                                        type="submit"
+                                        variant="default"
+                                        disabled={isLoadingAuth}
+                                        className="w-fit min-w-[140px] mt-2 h-11 text-base sm:text-lg font-bold"
+                                    >
+                                        {isLoadingAuth ? '...' : (isRegistering ? 'Create Profile' : 'Play Now')}
+                                    </Button>
+                                </div>
+                            </form>
+
+                            <div className="mt-6 text-center text-sm text-slate-400">
+                                {isRegistering ? 'Already have a profile? ' : "New player? "}
+                                <button
+                                    onClick={() => {
+                                        setIsRegistering(!isRegistering)
+                                        setAuthError('')
+                                        setRepeatPassword('')
+                                    }}
+                                    type="button"
+                                    className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors"
                                 >
-                                    {isLoadingAuth ? '...' : (isRegistering ? 'Create Profile' : 'Play Now')}
-                                </Button>
+                                    {isRegistering ? 'Sign In' : 'Sign Up'}
+                                </button>
                             </div>
-                        </form>
-
-                        <div className="mt-6 text-center text-sm text-slate-400">
-                            {isRegistering ? 'Already have a profile? ' : "New player? "}
-                            <button
-                                onClick={() => {
-                                    setIsRegistering(!isRegistering)
-                                    setAuthError('')
-                                    setRepeatPassword('')
-                                }}
-                                type="button"
-                                className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors"
-                            >
-                                {isRegistering ? 'Sign In' : 'Sign Up'}
-                            </button>
                         </div>
                     </div>
                 </div>
