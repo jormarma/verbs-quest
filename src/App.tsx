@@ -6,7 +6,7 @@ import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { LogOut } from 'lucide-react'
+import { LogOut, BookOpen, Swords } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
@@ -92,10 +92,14 @@ function GameBoard() {
         {/* Top Header / HUD */}
         <header className="flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4 mb-2 sm:mb-4">
           {/* Logo centered at the top */}
-          <div className="flex justify-center w-full">
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
-              {t('app.title')}
-            </h1>
+          <div className="flex flex-col items-center w-full">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-400" strokeWidth={2.5} />
+              <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
+                {t('app.title')}
+              </h1>
+              <Swords className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-emerald-400" strokeWidth={2.5} />
+            </div>
           </div>
 
           <div className="w-full h-px bg-slate-700 my-1 sm:my-3" />

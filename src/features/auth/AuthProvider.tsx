@@ -43,6 +43,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         e.preventDefault()
         setAuthError('')
 
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+            setAuthError('Username can only contain letters, numbers, and underscores.')
+            return
+        }
+
         if (isRegistering && password !== repeatPassword) {
             setAuthError('Passwords do not match.')
             return
@@ -53,7 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Supabase strictly requires email or phone. 
         // We simulate "username" auth by appending a dummy domain under the hood. 
         // Using a .com domain is required to pass Supabase's internal regex validator.
-        const simulatedEmail = `${username.toLowerCase().trim().replace(/[^a-z0-9]/g, '')}@verbsquest.com`
+        // We preserve underscores to guarantee that identical alphanumeric strings with different underscores are unique.
+        const simulatedEmail = `${username.toLowerCase().trim().replace(/[^a-z0-9_]/g, '')}@verbsquest.com`
 
         try {
             if (isRegistering) {
@@ -74,6 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 })
                 if (error) throw error
             }
+
+            // Clear the form fields upon successful completion
+            setUsername('')
+            setPassword('')
+            setRepeatPassword('')
+            setAuthError('')
         } catch (error: any) {
             let msg = error.message
             // Aggressively sanitize the error message so the illusion is maintained
@@ -86,6 +98,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const signOut = async () => {
+        // Clear all states so returning to login is a fresh start
+        setUsername('')
+        setPassword('')
+        setRepeatPassword('')
+        setAuthError('')
+        setIsRegistering(false)
         await supabase.auth.signOut()
     }
 
@@ -132,7 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     type="text"
                                     required
                                     minLength={3}
-                                    maxLength={20}
+                                    maxLength={12}
+                                    pattern="^[a-zA-Z0-9_]+$"
+                                    title="Only letters, numbers, and underscores are allowed"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     placeholder="Player123"
