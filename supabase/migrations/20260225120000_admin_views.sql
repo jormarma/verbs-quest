@@ -3,7 +3,7 @@
 -- 1. Overview RPC: Gets a list of users, their levels, total runs, and perfect runs
 CREATE OR REPLACE FUNCTION public.get_admin_users_overview()
 RETURNS TABLE (
-    user_id UUID,
+    user_id TEXT,
     username TEXT,
     current_level_cap INT,
     total_runs BIGINT,
@@ -20,7 +20,7 @@ BEGIN
 
     RETURN QUERY
     SELECT 
-        u.id, 
+        u.id::TEXT, 
         u.username, 
         u.current_level_cap,
         COUNT(gs.id) AS total_runs,

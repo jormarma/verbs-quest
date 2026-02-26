@@ -17,6 +17,21 @@ export interface AdminUserDetails {
     global_rank: number | null
 }
 
+export interface AdminRunDetails {
+    duration_seconds: number
+    is_perfect_run: boolean
+    completed_at: string
+    errors_count: number
+    client_timestamp_start: string
+}
+
+export interface AdminVerb {
+    id: string
+    infinitive: string
+    past_simple: string
+    past_participle: string
+}
+
 export function useAdminStats() {
     const [overviewData, setOverviewData] = useState<AdminUserOverview[]>([])
     const [isLoadingOverview, setIsLoadingOverview] = useState(false)
@@ -25,6 +40,11 @@ export function useAdminStats() {
     const [detailsData, setDetailsData] = useState<AdminUserDetails[]>([])
     const [isLoadingDetails, setIsLoadingDetails] = useState(false)
     const [detailsError, setDetailsError] = useState<string | null>(null)
+
+    const [levelRunsData, setLevelRunsData] = useState<AdminRunDetails[]>([])
+    const [levelVerbs, setLevelVerbs] = useState<AdminVerb[]>([])
+    const [isLoadingLevelRuns, setIsLoadingLevelRuns] = useState(false)
+    const [levelRunsError, setLevelRunsError] = useState<string | null>(null)
 
     const fetchOverview = useCallback(async () => {
         setIsLoadingOverview(true)
@@ -58,6 +78,25 @@ export function useAdminStats() {
         }
     }, [])
 
+    const fetchUserLevelRuns = useCallback(async (userId: string, level: number) => {
+        setIsLoadingLevelRuns(true)
+        setLevelRunsError(null)
+        try {
+            const { data, error } = await supabase.rpc('get_admin_user_level_runs', {
+                p_user_id: userId,
+                p_level: level
+            })
+            if (error) throw error
+            setLevelRunsData(data?.runs || [])
+            setLevelVerbs(data?.verbs || [])
+        } catch (err: any) {
+            console.error("Failed to fetch user level runs:", err)
+            setLevelRunsError(err.message)
+        } finally {
+            setIsLoadingLevelRuns(false)
+        }
+    }, [])
+
     return {
         overviewData,
         isLoadingOverview,
@@ -66,6 +105,11 @@ export function useAdminStats() {
         detailsData,
         isLoadingDetails,
         detailsError,
-        fetchUserDetails
+        fetchUserDetails,
+        levelRunsData,
+        levelVerbs,
+        isLoadingLevelRuns,
+        levelRunsError,
+        fetchUserLevelRuns
     }
 }
