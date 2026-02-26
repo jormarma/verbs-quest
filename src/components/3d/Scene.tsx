@@ -64,16 +64,16 @@ export function Scene() {
                 {/* Layered flying stars for depth and forward movement effect */}
 
                 {/* Far background layer - small, slow, light grayish */}
-                <FlyingStars count={1200} speed={1.5} size={0.04} color="#64748b" />
+                <FlyingStars count={1200} speed={0.5} size={0.04} color="#64748b" />
 
                 {/* Mid layer - medium speed, slightly warmer gray */}
-                <FlyingStars count={600} speed={3.5} size={0.07} color="#94a3b8" />
+                <FlyingStars count={600} speed={1.2} size={0.07} color="#94a3b8" />
 
                 {/* Foreground layer - fast, large, pale yellow/white */}
-                <FlyingStars count={300} speed={7} size={0.12} color="#fef3c7" />
+                <FlyingStars count={300} speed={2} size={0.12} color="#fef3c7" />
 
                 {/* Brightest/closest "hero" stars - very fast, prominent yellow */}
-                <FlyingStars count={100} speed={12} size={0.18} color="#fde047" />
+                <FlyingStars count={100} speed={4} size={0.18} color="#fde047" />
 
                 <Environment preset="city" />
             </Canvas>
