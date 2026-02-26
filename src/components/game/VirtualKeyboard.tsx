@@ -158,7 +158,7 @@ export function VirtualKeyboard() {
                         disabled={currentInput.trim().length === 0}
                         className="h-12 sm:h-14 flex-[0.7] max-w-[250px] font-bold text-base sm:text-lg"
                     >
-                        {t('keyboard.enter')}
+                        {t('keyboard.submit_answer')}
                     </Button>
                 </div>
             </div>

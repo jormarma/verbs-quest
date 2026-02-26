@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase/client'
@@ -19,12 +19,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isRegistering, setIsRegistering] = useState(false)
     const [authError, setAuthError] = useState('')
     const [isLoadingAuth, setIsLoadingAuth] = useState(false)
+    const usernameInputRef = useRef<HTMLInputElement>(null)
+    const passwordInputRef = useRef<HTMLInputElement>(null)
+    const repeatPasswordInputRef = useRef<HTMLInputElement>(null)
+
+    const resetAuthForm = () => {
+        setUsername('')
+        setPassword('')
+        setRepeatPassword('')
+        setAuthError('')
+        setIsRegistering(false)
+    }
 
     useEffect(() => {
         // 1. Get initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session)
             setUser(session?.user ?? null)
+            if (!session) {
+                resetAuthForm()
+            }
             setLoading(false)
         })
 
@@ -34,11 +48,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session)
             setUser(session?.user ?? null)
+            if (!session) {
+                resetAuthForm()
+            }
             setLoading(false)
         })
 
         return () => subscription.unsubscribe()
     }, [])
+
+    useEffect(() => {
+        if (loading || session) return
+
+        const clearNativeInputs = () => {
+            if (usernameInputRef.current) usernameInputRef.current.value = ''
+            if (passwordInputRef.current) passwordInputRef.current.value = ''
+            if (repeatPasswordInputRef.current) repeatPasswordInputRef.current.value = ''
+        }
+
+        clearNativeInputs()
+        const timeoutId = window.setTimeout(clearNativeInputs, 0)
+        return () => window.clearTimeout(timeoutId)
+    }, [loading, session, isRegistering])
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -99,12 +130,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const signOut = async () => {
-        // Clear all states so returning to login is a fresh start
-        setUsername('')
-        setPassword('')
-        setRepeatPassword('')
-        setAuthError('')
-        setIsRegistering(false)
+        // Ensure returning to login is always a fresh start
+        resetAuthForm()
         await supabase.auth.signOut()
     }
 
@@ -140,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                     <div className="flex-1 flex items-center justify-center -mt-8 sm:-mt-16">
                         <div className="max-w-md w-full bg-slate-800/90 backdrop-blur p-6 sm:px-8 py-6 rounded-2xl border border-slate-700 shadow-2xl">
-                            <form onSubmit={handleAuth} className="space-y-4">
+                            <form onSubmit={handleAuth} className="space-y-4" autoComplete="off">
                                 {authError && (
                                     <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
                                         {authError}
@@ -150,7 +177,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                 <div className="space-y-1 text-left">
                                     <label className="text-sm font-medium text-slate-300">Username</label>
                                     <input
+                                        ref={usernameInputRef}
                                         type="text"
+                                        name="vq_username"
                                         required
                                         minLength={3}
                                         maxLength={12}
@@ -159,17 +188,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
                                         placeholder="Player123"
+                                        autoComplete="off"
+                                        autoCapitalize="none"
+                                        spellCheck={false}
                                         className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
                                     />
                                 </div>
                                 <div className="space-y-1 text-left">
                                     <label className="text-sm font-medium text-slate-300">Password</label>
                                     <input
+                                        ref={passwordInputRef}
                                         type="password"
+                                        name="vq_password"
                                         required
                                         minLength={6}
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
+                                        autoComplete="off"
                                         className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
                                     />
                                 </div>
@@ -178,7 +213,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     <div className="space-y-1 text-left animate-in fade-in slide-in-from-top-1">
                                         <label className="text-sm font-medium text-slate-300">Repeat Password</label>
                                         <input
+                                            ref={repeatPasswordInputRef}
                                             type="password"
+                                            name="vq_repeat_password"
                                             required
                                             minLength={6}
                                             value={repeatPassword}
@@ -188,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                                     setAuthError('')
                                                 }
                                             }}
+                                            autoComplete="off"
                                             className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
                                         />
                                     </div>
