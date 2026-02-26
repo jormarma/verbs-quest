@@ -6,8 +6,10 @@ import { Button } from '../../components/ui/Button'
 import { AuthContext } from './AuthContext'
 import { Swords, BookOpen } from 'lucide-react'
 import { Scene } from '../../components/3d/Scene'
+import { useTranslation } from '../../lib/hooks/useTranslation'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+    const { t } = useTranslation()
     const [session, setSession] = useState<Session | null>(null)
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
@@ -76,12 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthError('')
 
         if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-            setAuthError('Username can only contain letters, numbers, and underscores.')
+            setAuthError(t('auth.error.username_chars'))
             return
         }
 
         if (isRegistering && password !== repeatPassword) {
-            setAuthError('Passwords do not match.')
+            setAuthError(t('auth.error.password_mismatch'))
             return
         }
 
@@ -155,12 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             <div className="flex items-center gap-3 sm:gap-4">
                                 <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-400" strokeWidth={2.5} />
                                 <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
-                                    VERBS QUEST
+                                    {t('app.title')}
                                 </h1>
                                 <Swords className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-emerald-400" strokeWidth={2.5} />
                             </div>
                             <p className="mt-2 text-slate-300 font-semibold text-center text-sm sm:text-lg max-w-lg">
-                                Master English irregular verbs<br />through an epic adventure!
+                                {t('auth.tagline')}
                             </p>
                         </div>
                     </header>
@@ -175,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                 )}
 
                                 <div className="space-y-1 text-left">
-                                    <label className="text-sm font-medium text-slate-300">Username</label>
+                                    <label className="text-sm font-medium text-slate-300">{t('auth.username')}</label>
                                     <input
                                         ref={usernameInputRef}
                                         type="text"
@@ -184,10 +186,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                         minLength={3}
                                         maxLength={12}
                                         pattern="^[a-zA-Z0-9_]+$"
-                                        title="Only letters, numbers, and underscores are allowed"
+                                        title={t('auth.username_hint')}
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        placeholder="Player123"
+                                        placeholder={t('auth.placeholder_username')}
                                         autoComplete="off"
                                         autoCapitalize="none"
                                         spellCheck={false}
@@ -195,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     />
                                 </div>
                                 <div className="space-y-1 text-left">
-                                    <label className="text-sm font-medium text-slate-300">Password</label>
+                                    <label className="text-sm font-medium text-slate-300">{t('auth.password')}</label>
                                     <input
                                         ref={passwordInputRef}
                                         type="password"
@@ -211,7 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                                 {isRegistering && (
                                     <div className="space-y-1 text-left animate-in fade-in slide-in-from-top-1">
-                                        <label className="text-sm font-medium text-slate-300">Repeat Password</label>
+                                        <label className="text-sm font-medium text-slate-300">{t('auth.repeat_password')}</label>
                                         <input
                                             ref={repeatPasswordInputRef}
                                             type="password"
@@ -221,9 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                             value={repeatPassword}
                                             onChange={(e) => {
                                                 setRepeatPassword(e.target.value)
-                                                if (authError === 'Passwords do not match.') {
-                                                    setAuthError('')
-                                                }
+                                                setAuthError('')
                                             }}
                                             autoComplete="off"
                                             className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
@@ -238,13 +238,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                         disabled={isLoadingAuth}
                                         className="w-fit min-w-[140px] mt-2 h-11 text-base sm:text-lg font-bold"
                                     >
-                                        {isLoadingAuth ? '...' : (isRegistering ? 'Create Profile' : 'Play Now')}
+                                        {isLoadingAuth ? '...' : (isRegistering ? t('auth.create_profile') : t('auth.play_now'))}
                                     </Button>
                                 </div>
                             </form>
 
                             <div className="mt-6 text-center text-sm text-slate-400">
-                                {isRegistering ? 'Already have a profile? ' : "New player? "}
+                                {isRegistering ? t('auth.already_have_profile') : t('auth.new_player')}
                                 <button
                                     onClick={() => {
                                         setIsRegistering(!isRegistering)
@@ -254,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     type="button"
                                     className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors"
                                 >
-                                    {isRegistering ? 'Sign In' : 'Sign Up'}
+                                    {isRegistering ? t('auth.signin') : t('auth.signup')}
                                 </button>
                             </div>
                         </div>

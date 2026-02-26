@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { useAuth } from './features/auth/AuthContext'
 import { useGameStore } from './lib/stores/useGameStore'
@@ -6,13 +6,14 @@ import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { LogOut, BookOpen, Swords } from 'lucide-react'
+import { LogOut, BookOpen, Swords, Play, Trophy, ArrowLeft } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
 import { useProfile } from './lib/hooks/useProfile'
 import { useTotalLevels } from './lib/hooks/useTotalLevels'
 import { AdminDashboard } from './features/admin/AdminDashboard'
+import { GlobalLeaderboardTable } from './features/admin/GlobalLeaderboardTable'
 
 // i18n
 import { useTranslation } from './lib/hooks/useTranslation'
@@ -28,6 +29,8 @@ function GameBoard() {
   const [selectedLevel, setSelectedLevel] = useState<number>(1)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [lobbyView, setLobbyView] = useState<'menu' | 'play' | 'leaderboard'>('menu')
+  const prevStatusRef = useRef(session.status)
 
   // Sync selected level to max unlocked level when profile initially loads
   useEffect(() => {
@@ -38,6 +41,7 @@ function GameBoard() {
 
   const levelToPlay = selectedLevel
   const { questions, isLoading, error } = useVerbs(levelToPlay)
+  const isLeaderboardLobby = session.status === 'IDLE' && lobbyView === 'leaderboard'
 
   useEffect(() => {
     if (countdown === null) return
@@ -50,6 +54,14 @@ function GameBoard() {
       setCountdown(null)
     }
   }, [countdown, startLevelTimer])
+
+  useEffect(() => {
+    const previousStatus = prevStatusRef.current
+    if (previousStatus !== 'IDLE' && session.status === 'IDLE') {
+      setLobbyView('menu')
+    }
+    prevStatusRef.current = session.status
+  }, [session.status])
 
   const handleLevelClick = (lvl: number) => {
     setSelectedLevel(lvl)
@@ -82,15 +94,25 @@ function GameBoard() {
   ) : null
 
   return (
-    <div className="relative min-h-screen w-full font-sans text-slate-100 overflow-hidden flex flex-col">
+    <div className="relative h-[100dvh] w-full font-sans text-slate-100 overflow-hidden flex flex-col">
       {/* Global 3D Background layer (-z-10) */}
       <Scene />
 
       {/* UI Foreground Layer (z-10) */}
-      <main className="z-10 flex-1 flex flex-col p-4 md:p-8">
+      <main
+        className={cn(
+          "z-10 flex-1 min-h-0",
+          isLeaderboardLobby
+            ? "grid grid-rows-[auto_minmax(0,1fr)] gap-2 sm:gap-3 p-3 md:p-4 overflow-hidden"
+            : "flex flex-col p-4 md:p-8"
+        )}
+      >
 
         {/* Top Header / HUD */}
-        <header className="flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4 mb-2 sm:mb-4">
+        <header className={cn(
+          "flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4",
+          isLeaderboardLobby ? "mb-0" : "mb-2 sm:mb-4"
+        )}>
           {/* Logo centered at the top */}
           <div className="flex flex-col items-center w-full">
             <div className="flex items-center gap-3 sm:gap-4">
@@ -145,58 +167,117 @@ function GameBoard() {
         </header>
 
         {/* Center Stage */}
-        <section className="flex-1 flex flex-col items-center justify-center w-full max-w-5xl mx-auto my-2 sm:my-8">
+        <section className={cn(
+          "flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto",
+          isLeaderboardLobby ? "items-stretch justify-start my-0 overflow-hidden" : "items-center justify-center my-2 sm:my-8"
+        )}>
 
           {session.status === 'IDLE' && (
-            <div className="flex flex-col items-center gap-3 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-md sm:max-w-2xl px-2 sm:px-4">
-              <div className="text-center space-y-2 sm:space-y-4 w-full">
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">{t('quest.levels')}</h2>
-
-                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full">
-                  {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
-                    const isLocked = lvl > levelCap
-                    const isHighestUnlocked = lvl === levelCap
-                    const isSelected = lvl === selectedLevel
-
-                    return (
-                      <button
-                        key={lvl}
-                        disabled={isLocked || isLoading}
-                        onClick={() => handleLevelClick(lvl)}
-                        className={cn(
-                          "relative flex flex-col items-center justify-center aspect-square rounded-md transition-all duration-300 border-2 overflow-hidden shadow-sm group",
-                          isLocked ? "bg-slate-800 opacity-50 text-slate-500 border-slate-700 pointer-events-none" :
-                            isHighestUnlocked ? "bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] hover:-translate-y-1 hover:shadow-lg" :
-                              "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:-translate-y-1 hover:shadow-lg active:scale-95",
-                          isSelected && !isLocked && "ring-4 ring-offset-2 ring-offset-slate-900 ring-white scale-105 border-transparent!"
-                        )}
-                      >
-                        {isHighestUnlocked && (
-                          <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-colors pointer-events-none" />
-                        )}
-                        <span className="font-black text-xl sm:text-2xl md:text-3xl z-10">{lvl}</span>
-                      </button>
-                    )
-                  })}
+            <>
+              {lobbyView === 'menu' && (
+                <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-md px-4">
+                  <h2 className="text-2xl sm:text-3xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent text-center">
+                    {t('home.choose_mode')}
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                    <Button
+                      size="lg"
+                      variant="default"
+                      className="h-16 text-lg font-bold flex items-center justify-center gap-2"
+                      onClick={() => setLobbyView('play')}
+                    >
+                      <Play className="w-5 h-5" />
+                      {t('home.play')}
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="h-16 text-lg font-bold flex items-center justify-center gap-2"
+                      onClick={() => setLobbyView('leaderboard')}
+                    >
+                      <Trophy className="w-5 h-5" />
+                      {t('home.leaderboard')}
+                    </Button>
+                  </div>
                 </div>
+              )}
 
-                <p className="text-base sm:text-lg text-blue-200/80 mt-3 sm:mt-6 font-medium">{t('quest.tap_unlocked')}</p>
+              {lobbyView === 'play' && (
+                <div className="flex flex-col items-center gap-3 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-md sm:max-w-2xl px-2 sm:px-4">
+                  <div className="w-full flex justify-start">
+                    <Button variant="ghost" className="text-slate-300 hover:text-white" onClick={() => setLobbyView('menu')}>
+                      <ArrowLeft className="w-4 h-4 mr-1" />
+                      {t('home.back')}
+                    </Button>
+                  </div>
+                  <div className="text-center space-y-2 sm:space-y-4 w-full">
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">{t('quest.levels')}</h2>
 
-                {error && <p className="text-red-400 font-bold mt-2">{t('error.loading_verbs', { error })}</p>}
-              </div>
+                    <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full">
+                      {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
+                        const isLocked = lvl > levelCap
+                        const isHighestUnlocked = lvl === levelCap
+                        const isSelected = lvl === selectedLevel
 
-              <div className="flex flex-col items-center mt-1 sm:mt-2 w-full">
-                <Button
-                  size="lg"
-                  variant="default"
-                  disabled={isLoading || questions.length === 0}
-                  className="text-lg sm:text-xl px-8 py-4 sm:px-12 sm:py-8 flex items-center"
-                  onClick={handleStartQuest}
-                >
-                  {isLoading ? t('quest.loading') : t('quest.start')}
-                </Button>
-              </div>
-            </div>
+                        return (
+                          <button
+                            key={lvl}
+                            disabled={isLocked || isLoading}
+                            onClick={() => handleLevelClick(lvl)}
+                            className={cn(
+                              "relative flex flex-col items-center justify-center aspect-square rounded-md transition-all duration-300 border-2 overflow-hidden shadow-sm group",
+                              isLocked ? "bg-slate-800 opacity-50 text-slate-500 border-slate-700 pointer-events-none" :
+                                isHighestUnlocked ? "bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] hover:-translate-y-1 hover:shadow-lg" :
+                                  "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:-translate-y-1 hover:shadow-lg active:scale-95",
+                              isSelected && !isLocked && "ring-4 ring-offset-2 ring-offset-slate-900 ring-white scale-105 border-transparent!"
+                            )}
+                          >
+                            {isHighestUnlocked && (
+                              <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-colors pointer-events-none" />
+                            )}
+                            <span className="font-black text-xl sm:text-2xl md:text-3xl z-10">{lvl}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <p className="text-base sm:text-lg text-blue-200/80 mt-3 sm:mt-6 font-medium">{t('quest.tap_unlocked')}</p>
+
+                    {error && <p className="text-red-400 font-bold mt-2">{t('error.loading_verbs', { error })}</p>}
+                  </div>
+
+                  <div className="flex flex-col items-center mt-1 sm:mt-2 w-full">
+                    <Button
+                      size="lg"
+                      variant="default"
+                      disabled={isLoading || questions.length === 0}
+                      className="text-lg sm:text-xl px-8 py-4 sm:px-12 sm:py-8 flex items-center"
+                      onClick={handleStartQuest}
+                    >
+                      {isLoading ? t('quest.loading') : t('quest.start')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {lobbyView === 'leaderboard' && (
+                <div className="w-full h-full min-h-0 grid grid-rows-[minmax(0,1fr)_auto] gap-2 sm:gap-3 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                  <div className="min-h-0 bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden shadow-xl flex flex-col">
+                    <GlobalLeaderboardTable mode="public" compact />
+                  </div>
+                  <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+                    <Button
+                      variant="default"
+                      className="min-w-[180px] font-bold"
+                      onClick={() => setLobbyView('menu')}
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-1" />
+                      {t('home.back')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Cancel Modal (Overlay over PLAYING area) */}
