@@ -6,7 +6,7 @@ import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { LogOut, User as UserIcon } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
@@ -93,34 +93,48 @@ function GameBoard() {
         <header className="flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4 mb-2 sm:mb-4">
           {/* Logo centered at the top */}
           <div className="flex justify-center w-full">
-            <h1 className="text-2xl sm:text-3xl md:text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
               {t('app.title')}
             </h1>
           </div>
 
-          {/* Sub-header with User on the right, Timer on the left if playing */}
-          <div className="flex justify-between items-center w-full h-10">
-            <div className="flex items-center">
-              {session.status === 'PLAYING' && countdown === null && <Timer />}
+          <div className="w-full h-px bg-slate-700 my-1 sm:my-3" />
+
+          {/* Sub-header with User on the left, Timer or controls on the right */}
+          <div className="flex justify-between items-center w-full h-10 px-1 sm:px-2">
+            {/* Left Side: Username Always Visible */}
+            <div className="flex items-center gap-4">
+              {user && (
+                <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2 bg-slate-800/50 border border-slate-600 rounded-md px-3 py-1.5 shadow-lg backdrop-blur-md text-slate-200">
+                  <span className="font-bold text-sm md:text-base tracking-wide truncate max-w-[150px] sm:max-w-[250px]">
+                    @{user.user_metadata?.full_name || t('player.name')}
+                  </span>
+                </div>
+              )}
             </div>
 
+            {/* Right Side: Swap Timer vs Controls */}
             <div className="flex items-center gap-2">
-              <LanguageSwitcher />
+              {session.status === 'PLAYING' && countdown === null ? (
+                // During gameplay: Show Timer
+                <Timer />
+              ) : (
+                // In lobby/menus: Show Controls
+                <>
+                  <LanguageSwitcher />
 
-              {user && (
-                <div className="flex items-center gap-1.5 bg-slate-800/80 backdrop-blur px-3 py-1.5 rounded-full border border-slate-700/50 shadow-sm animate-in fade-in slide-in-from-top-2">
-                  <UserIcon className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  <span className="font-bold text-slate-200 text-xs md:text-sm tracking-wide truncate max-w-[80px] sm:max-w-[150px]">
-                    {user.user_metadata?.full_name || t('player.name')}
-                  </span>
-                  <button
-                    onClick={signOut}
-                    className="ml-1 text-slate-400 hover:text-red-400 transition-colors p-1 rounded-md hover:bg-slate-700/50 flex-shrink-0"
-                    title={t('auth.signout')}
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                  {user && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={signOut}
+                      className="w-8 h-8 sm:w-9 sm:h-9 text-slate-400 hover:text-red-400 hover:border-red-500/50 hover:bg-red-950/30 transition-colors"
+                      title={t('auth.signout')}
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -225,7 +239,7 @@ function GameBoard() {
 
               {/* Question Card */}
               <div className="text-center space-y-2 sm:space-y-4">
-                <div className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 text-xs sm:text-sm font-bold uppercase tracking-widest shadow-inner">
+                <div className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-md bg-blue-900/40 text-blue-300 border border-blue-700/50 text-xs sm:text-sm font-bold uppercase tracking-widest shadow-inner">
                   {t(`tense.${currentQ.tense}`)}
                 </div>
                 {/* Prompting the player with the infinitive loaded directly from Supabase */}
