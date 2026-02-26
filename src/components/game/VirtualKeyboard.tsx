@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react'
 import { useGameStore } from '../../lib/stores/useGameStore'
+import { useTranslation } from '../../lib/hooks/useTranslation'
 import { Button } from '../ui/Button'
 import { Delete, CheckCircle2, XCircle } from 'lucide-react'
 import { cn } from '../../lib/utils/cn'
@@ -9,6 +10,7 @@ const ALL_CONSONANTS = 'BCDFGHJKLMNPQRSTVWXYZ'.split('')
 
 export function VirtualKeyboard() {
     const { gameplay, session, setInput, submitAnswer, advanceQuestion } = useGameStore()
+    const { t } = useTranslation()
     const { currentInput, feedbackState, feedbackTarget } = gameplay
 
     const isMainQueue = gameplay.currentQuestionIndex < gameplay.mainQueue.length
@@ -87,16 +89,16 @@ export function VirtualKeyboard() {
                 {feedbackState === 'CORRECT' && (
                     <div className="flex items-center gap-2 text-emerald-400 font-bold text-2xl md:text-3xl animate-in zoom-in">
                         <CheckCircle2 className="w-8 h-8 md:w-10 md:h-10" />
-                        <span>CORRECT!</span>
+                        <span>{t('keyboard.correct')}</span>
                     </div>
                 )}
                 {feedbackState === 'INCORRECT' && (
                     <div className="flex flex-col items-center gap-2 text-xl md:text-2xl font-bold animate-in slide-in-from-bottom-2">
                         <div className="flex items-center gap-2 text-red-400">
                             <XCircle className="w-8 h-8 md:w-10 md:h-10" />
-                            <span>INCORRECT!</span>
+                            <span>{t('keyboard.incorrect')}</span>
                         </div>
-                        <span className="text-slate-300 text-lg">Right answer: <span className="font-mono bg-red-900/50 px-3 py-1 rounded text-white ml-2 border border-red-500/30">{feedbackTarget}</span></span>
+                        <span className="text-slate-300 text-lg">{t('keyboard.right_answer')} <span className="font-mono bg-red-900/50 px-3 py-1 rounded text-white ml-2 border border-red-500/30">{feedbackTarget}</span></span>
                     </div>
                 )}
                 <Button
@@ -104,7 +106,7 @@ export function VirtualKeyboard() {
                     className="w-full max-w-sm h-14 mt-4 text-lg font-bold animate-bounce"
                     onClick={advanceQuestion}
                 >
-                    NEXT QUESTION
+                    {t('keyboard.next_question')}
                 </Button>
             </div>
 
@@ -156,7 +158,7 @@ export function VirtualKeyboard() {
                         disabled={currentInput.trim().length === 0}
                         className="h-12 sm:h-14 flex-[0.7] max-w-[250px] font-bold text-base sm:text-lg"
                     >
-                        ENTER
+                        {t('keyboard.enter')}
                     </Button>
                 </div>
             </div>

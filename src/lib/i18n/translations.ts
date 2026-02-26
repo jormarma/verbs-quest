@@ -42,7 +42,12 @@ export const en: TranslationDict = {
     "tense.PAST_SIMPLE": "PAST SIMPLE",
     "tense.PAST_PARTICIPLE": "PAST PARTICIPLE",
     "timer.errors": "Errors:",
-    "timer.err": "Err"
+    "timer.err": "Err",
+    "keyboard.correct": "CORRECT!",
+    "keyboard.incorrect": "INCORRECT!",
+    "keyboard.right_answer": "Right answer:",
+    "keyboard.next_question": "NEXT QUESTION",
+    "keyboard.enter": "ENTER"
 }
 
 export const es: TranslationDict = {
@@ -83,7 +88,12 @@ export const es: TranslationDict = {
     "tense.PAST_SIMPLE": "PASADO SIMPLE",
     "tense.PAST_PARTICIPLE": "PARTICIPIO PASADO",
     "timer.errors": "Errores:",
-    "timer.err": "Err"
+    "timer.err": "Err",
+    "keyboard.correct": "¡CORRECTO!",
+    "keyboard.incorrect": "¡INCORRECTO!",
+    "keyboard.right_answer": "Respuesta correcta:",
+    "keyboard.next_question": "SIGUIENTE PREGUNTA",
+    "keyboard.enter": "INTRO"
 }
 
 export const verbTranslationsEs: Record<string, string> = {
