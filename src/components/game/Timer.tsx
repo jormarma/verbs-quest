@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { useGameStore } from '../../lib/stores/useGameStore'
 import { Clock } from 'lucide-react'
 import { cn } from '../../lib/utils/cn'
+import { useTranslation } from '../../lib/hooks/useTranslation'
 
 export function Timer() {
     const { session, gameplay } = useGameStore()
+    const { t } = useTranslation()
     const [timeLeft, setTimeLeft] = useState(session.config.timeLimit)
 
     useEffect(() => {
@@ -43,8 +45,8 @@ export function Timer() {
             </span>
             {/* Show errors as part of the HUD */}
             <div className="ml-2 pl-2 md:ml-3 md:pl-3 border-l border-slate-600/50 flex items-center gap-1 text-xs md:text-sm font-medium">
-                <span className="text-slate-400 hidden sm:inline">Errors:</span>
-                <span className="text-slate-400 sm:hidden">Err:</span>
+                <span className="text-slate-400 hidden sm:inline">{t('timer.errors')}</span>
+                <span className="text-slate-400 sm:hidden">{t('timer.err')}</span>
                 <span className={gameplay.errorsInLevel > 0 ? "text-amber-400" : "text-emerald-400"}>
                     {gameplay.errorsInLevel}
                 </span>

@@ -14,9 +14,14 @@ import { useProfile } from './lib/hooks/useProfile'
 import { useTotalLevels } from './lib/hooks/useTotalLevels'
 import { AdminDashboard } from './features/admin/AdminDashboard'
 
+// i18n
+import { useTranslation } from './lib/hooks/useTranslation'
+import { LanguageSwitcher } from './components/ui/LanguageSwitcher'
+
 function GameBoard() {
   const { session, gameplay, startGame, startLevelTimer, cancelGame } = useGameStore()
   const { user, signOut } = useAuth()
+  const { t, tVerb } = useTranslation()
 
   const { levelCap, role, isLoadingProfile } = useProfile()
   const { totalLevels, isLoadingTotalLevels } = useTotalLevels()
@@ -89,7 +94,7 @@ function GameBoard() {
           {/* Logo centered at the top */}
           <div className="flex justify-center w-full">
             <h1 className="text-2xl sm:text-3xl md:text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
-              VERBS QUEST
+              {t('app.title')}
             </h1>
           </div>
 
@@ -100,16 +105,18 @@ function GameBoard() {
             </div>
 
             <div className="flex items-center gap-2">
+              <LanguageSwitcher />
+
               {user && (
                 <div className="flex items-center gap-1.5 bg-slate-800/80 backdrop-blur px-3 py-1.5 rounded-full border border-slate-700/50 shadow-sm animate-in fade-in slide-in-from-top-2">
                   <UserIcon className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                   <span className="font-bold text-slate-200 text-xs md:text-sm tracking-wide truncate max-w-[80px] sm:max-w-[150px]">
-                    {user.user_metadata?.full_name || 'Player'}
+                    {user.user_metadata?.full_name || t('player.name')}
                   </span>
                   <button
                     onClick={signOut}
                     className="ml-1 text-slate-400 hover:text-red-400 transition-colors p-1 rounded-full hover:bg-slate-700/50 flex-shrink-0"
-                    title="Sign Out"
+                    title={t('auth.signout')}
                   >
                     <LogOut className="w-3.5 h-3.5" />
                   </button>
@@ -125,7 +132,7 @@ function GameBoard() {
           {session.status === 'IDLE' && (
             <div className="flex flex-col items-center gap-3 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-md sm:max-w-2xl px-2 sm:px-4">
               <div className="text-center space-y-2 sm:space-y-4 w-full">
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">Quest Levels</h2>
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">{t('quest.levels')}</h2>
 
                 <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full">
                   {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
@@ -155,9 +162,9 @@ function GameBoard() {
                   })}
                 </div>
 
-                <p className="text-base sm:text-lg text-blue-200/80 mt-3 sm:mt-6 font-medium">Tap an unlocked level to begin.</p>
+                <p className="text-base sm:text-lg text-blue-200/80 mt-3 sm:mt-6 font-medium">{t('quest.tap_unlocked')}</p>
 
-                {error && <p className="text-red-400 font-bold mt-2">Error loading verbs: {error}</p>}
+                {error && <p className="text-red-400 font-bold mt-2">{t('error.loading_verbs', { error })}</p>}
               </div>
 
               <div className="flex flex-col items-center mt-1 sm:mt-2 w-full">
@@ -167,7 +174,7 @@ function GameBoard() {
                   className="text-lg sm:text-xl px-8 py-4 sm:px-12 sm:py-8 rounded-xl sm:rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center"
                   onClick={handleStartQuest}
                 >
-                  {isLoading ? 'Loading...' : 'Start Quest'}
+                  {isLoading ? t('quest.loading') : t('quest.start')}
                 </Button>
               </div>
             </div>
@@ -177,11 +184,11 @@ function GameBoard() {
           {showCancelModal && session.status === 'PLAYING' && (
             <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm -mx-4 md:-mx-8">
               <div className="bg-slate-800 border border-slate-700 shadow-2xl rounded-2xl p-6 text-center max-w-sm w-full animate-in zoom-in-95 duration-200">
-                <h3 className="text-2xl font-black text-rose-500 mb-2">Give Up?</h3>
-                <p className="text-slate-300 mb-6">Are you sure you want to cancel the current run? No progress or errors will be recorded, but you will lose this attempt.</p>
+                <h3 className="text-2xl font-black text-rose-500 mb-2">{t('quest.give_up')}</h3>
+                <p className="text-slate-300 mb-6">{t('quest.cancel_confirm')}</p>
                 <div className="flex gap-4 justify-center">
                   <Button variant="outline" onClick={() => setShowCancelModal(false)}>
-                    Keep Playing
+                    {t('quest.keep_playing')}
                   </Button>
                   <Button
                     className="bg-rose-600 hover:bg-rose-500 text-white border-transparent"
@@ -190,7 +197,7 @@ function GameBoard() {
                       cancelGame()
                     }}
                   >
-                    Yes, Cancel
+                    {t('quest.yes_cancel')}
                   </Button>
                 </div>
               </div>
@@ -218,12 +225,17 @@ function GameBoard() {
               {/* Question Card */}
               <div className="text-center space-y-2 sm:space-y-4">
                 <div className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 text-xs sm:text-sm font-bold uppercase tracking-widest shadow-inner">
-                  {currentQ.tense.replace('_', ' ')}
+                  {t(`tense.${currentQ.tense}`)}
                 </div>
                 {/* Prompting the player with the infinitive loaded directly from Supabase */}
                 <h2 className="text-4xl sm:text-5xl md:text-7xl font-black text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] tracking-tight uppercase">
                   {currentQ.infinitive}
                 </h2>
+                {tVerb(currentQ.infinitive) && (
+                  <p className="text-sm sm:text-base text-blue-200/80 font-bold uppercase tracking-widest mt-0 sm:mt-1">
+                    {tVerb(currentQ.infinitive)}
+                  </p>
+                )}
               </div>
 
               {/* Input Display Area */}
@@ -248,7 +260,7 @@ function GameBoard() {
                       {gameplay.currentInput}
                     </span>
                   ) : (
-                    <span className="text-3xl sm:text-4xl md:text-5xl font-mono font-bold text-slate-600 tracking-widest animate-pulse">TYPE...</span>
+                    <span className="text-3xl sm:text-4xl md:text-5xl font-mono font-bold text-slate-600 tracking-widest animate-pulse">{t('quest.type')}</span>
                   )}
                   {/* Blinking Cursor */}
                   {gameplay.feedbackState === 'NONE' && <div className="h-8 sm:h-10 w-1 bg-blue-500 ml-1 animate-pulse" />}
@@ -262,7 +274,7 @@ function GameBoard() {
                 onClick={() => setShowCancelModal(true)}
                 className="mt-0 sm:mt-2 text-xs sm:text-sm font-bold border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-950/30 transition-all tracking-wide"
               >
-                Cancel Run
+                {t('quest.cancel_run')}
               </Button>
             </div>
           )}
@@ -272,37 +284,37 @@ function GameBoard() {
               {gameplay.errorsInLevel === 0 && session.level === 18 ? (
                 <div className="flex flex-col items-center animate-bounce">
                   <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-emerald-400 to-yellow-300 drop-shadow-[0_0_15px_rgba(252,211,77,0.8)]">
-                    🎉 INCREDIBLE! 🎉
+                    {t('quest.incredible')}
                   </h2>
-                  <p className="text-xl md:text-2xl font-bold mt-2 text-emerald-300 drop-shadow-sm">YOU MASTERED ALL LEVELS!</p>
+                  <p className="text-xl md:text-2xl font-bold mt-2 text-emerald-300 drop-shadow-sm">{t('quest.mastered_all')}</p>
                 </div>
               ) : gameplay.errorsInLevel < 100 ? (
-                <h2 className="text-4xl md:text-5xl text-center font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)] leading-tight">Level Complete!</h2>
+                <h2 className="text-4xl md:text-5xl text-center font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)] leading-tight">{t('quest.level_complete')}</h2>
               ) : (
-                <h2 className="text-4xl md:text-5xl text-center font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)] leading-tight">Level Failed!</h2>
+                <h2 className="text-4xl md:text-5xl text-center font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)] leading-tight">{t('quest.level_failed')}</h2>
               )}
 
               <div className="bg-slate-800/80 p-4 md:p-6 rounded-2xl border border-slate-700 shadow-xl text-center space-y-2 max-w-lg w-full">
                 {gameplay.errorsInLevel === 0 ? (
                   session.level === 18 ? (
-                    <p className="text-xl md:text-2xl text-yellow-300 font-bold">Absolutely perfect! A true master of irregular verbs!</p>
+                    <p className="text-xl md:text-2xl text-yellow-300 font-bold">{t('quest.perfect_master')}</p>
                   ) : session.level < levelCap ? (
-                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">Perfect run! Well done practicing.</p>
+                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">{t('quest.perfect_practice')}</p>
                   ) : (
-                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">Perfect run! You unlocked the next level.</p>
+                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">{t('quest.perfect_unlocked')}</p>
                   )
                 ) : gameplay.errorsInLevel < 100 ? (
                   <div className="flex flex-col gap-1.5 md:gap-2">
-                    <p className="text-lg md:text-xl text-slate-300">Errors made: {gameplay.errorsInLevel}</p>
-                    <p className="text-sm md:text-base text-yellow-400 font-bold">Good job, but you need a perfect run to unlock the next level.</p>
+                    <p className="text-lg md:text-xl text-slate-300">{t('quest.errors_made', { count: gameplay.errorsInLevel })}</p>
+                    <p className="text-sm md:text-base text-yellow-400 font-bold">{t('quest.need_perfect')}</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    <p className="text-xl text-red-400 font-bold">Time's up!</p>
+                    <p className="text-xl text-red-400 font-bold">{t('quest.times_up')}</p>
                     {session.level > 1 ? (
-                      <p className="text-red-300">You lost access to this level. Beat the previous one to unlock it again!</p>
+                      <p className="text-red-300">{t('quest.lost_access')}</p>
                     ) : (
-                      <p className="text-red-300">Keep trying! You will get it next time.</p>
+                      <p className="text-red-300">{t('quest.keep_trying')}</p>
                     )}
                   </div>
                 )}
@@ -311,9 +323,9 @@ function GameBoard() {
               {/* Leaderboard Section */}
               {gameplay.errorsInLevel < 100 && (
                 <div className="w-full max-w-lg bg-slate-900/60 backdrop-blur border border-slate-700 p-4 md:p-6 rounded-2xl shadow-xl mt-2 md:mt-4">
-                  <h3 className="text-xl md:text-2xl font-black text-emerald-400 mb-3 md:mb-4 text-center uppercase tracking-widest drop-shadow-sm border-b border-slate-700/50 pb-2">Top 3 Times</h3>
+                  <h3 className="text-xl md:text-2xl font-black text-emerald-400 mb-3 md:mb-4 text-center uppercase tracking-widest drop-shadow-sm border-b border-slate-700/50 pb-2">{t('leaderboard.top3')}</h3>
                   {gameplay.topScores.length === 0 ? (
-                    <div className="text-center py-4 text-slate-400 animate-pulse">Loading scores...</div>
+                    <div className="text-center py-4 text-slate-400 animate-pulse">{t('quest.loading')}</div>
                   ) : (
                     <>
                       <ul className="space-y-2">
@@ -342,13 +354,13 @@ function GameBoard() {
                                 <span className="font-mono text-base md:text-xl text-white font-medium pl-1 md:pl-0">{timeString}</span>
                                 {isNew && (
                                   <span className="text-[9px] md:text-[10px] font-black tracking-widest text-emerald-300 bg-emerald-900 px-1.5 py-0.5 rounded-full border border-emerald-500 ml-1 md:ml-2">
-                                    NEW BEST!
+                                    {t('leaderboard.new_best')}
                                   </span>
                                 )}
                               </div>
                               {score.is_perfect_run && (
                                 <div className="flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full shrink-0">
-                                  <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">PERFECT</span>
+                                  <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">{t('leaderboard.perfect')}</span>
                                   <span>⭐</span>
                                 </div>
                               )}
@@ -371,16 +383,16 @@ function GameBoard() {
                           const isPerfect = gameplay.errorsInLevel === 0;
                           return (
                             <div className="mt-4 pt-4 border-t border-slate-700/50">
-                              <span className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 block text-center">Your Last Run</span>
+                              <span className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 block text-center">{t('leaderboard.your_last')}</span>
                               <div className="flex justify-between items-center p-2 md:p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg shadow-inner backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">
                                 <span className="text-blue-200 font-bold text-sm tracking-wider flex items-center gap-2">
-                                  Current Time
+                                  {t('leaderboard.current_time')}
                                 </span>
                                 <div className="flex items-center gap-3">
                                   <span className="font-mono text-base md:text-xl text-blue-100 font-black tracking-wider">{mins}:{secs.toString().padStart(2, '0')}</span>
                                   {isPerfect && (
                                     <div className="flex items-center gap-1 px-2 py-0.5 md:px-3 md:py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full shrink-0">
-                                      <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">PERFECT</span>
+                                      <span className="text-yellow-400 text-[10px] md:text-sm font-bold tracking-wide">{t('leaderboard.perfect')}</span>
                                       <span>⭐</span>
                                     </div>
                                   )}
@@ -401,7 +413,7 @@ function GameBoard() {
                 className="mt-4"
                 variant="outline"
               >
-                Continue
+                {t('btn.continue')}
               </Button>
             </div>
           )}
