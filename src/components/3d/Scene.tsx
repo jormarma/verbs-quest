@@ -1,9 +1,9 @@
 import { useRef, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Environment, Float, Sparkles } from '@react-three/drei'
+import { Environment } from '@react-three/drei'
 import * as THREE from 'three'
 
-function FlyingStars({ count = 1000, speed = 5, size = 0.1, color = "#cbd5e1", opacity = 0.6 }) {
+function FlyingStars({ count = 1000, speed = 5, size = 0.1, color = "#cbd5e1" }) {
     const pointsRef = useRef<THREE.Points>(null)
 
     const positions = useMemo(() => {
@@ -35,63 +35,45 @@ function FlyingStars({ count = 1000, speed = 5, size = 0.1, color = "#cbd5e1", o
                 <bufferAttribute
                     attach="attributes-position"
                     count={count}
-                    array={positions}
-                    itemSize={3}
+                    args={[positions, 3]}
                 />
             </bufferGeometry>
-            <pointsMaterial size={size} color={color} transparent opacity={opacity} sizeAttenuation />
+            {/* Additive blending makes the overlapping particles "glow" */}
+            <pointsMaterial
+                size={size}
+                color={color}
+                transparent
+                opacity={0.8}
+                sizeAttenuation
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+            />
         </points>
     )
 }
 
 export function Scene() {
     return (
-        <div className="fixed inset-0 -z-10 bg-slate-900 pointer-events-none blur-[2px] opacity-80">
+        <div className="fixed inset-0 -z-10 bg-slate-950 pointer-events-none">
             <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
-                <color attach="background" args={['#0f172a']} />
+                {/* Slightly darker base color to make the additive stars pop more */}
+                <color attach="background" args={['#020617']} />
 
-                <ambientLight intensity={0.6} />
-                <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={0.8} />
+                <ambientLight intensity={0.2} />
 
-                {/* Kid-friendly floating shapes with washed-out, pastel colors */}
-                <Float speed={1} rotationIntensity={1.5} floatIntensity={1}>
-                    <mesh position={[-2.5, 1.5, -3]}>
-                        <torusGeometry args={[0.5, 0.2, 16, 32]} />
-                        <meshStandardMaterial color="#fde68a" roughness={0.6} metalness={0.1} /> {/* Washed Amber */}
-                    </mesh>
-                </Float>
+                {/* Layered flying stars for depth and forward movement effect */}
 
-                <Float speed={1.5} rotationIntensity={0.5} floatIntensity={1.2}>
-                    <mesh position={[2.5, -1, -4]}>
-                        <sphereGeometry args={[0.6, 32, 32]} />
-                        <meshStandardMaterial color="#fbcfe8" roughness={0.6} metalness={0.1} /> {/* Washed Pink */}
-                    </mesh>
-                </Float>
+                {/* Far background layer - small, slow, light grayish */}
+                <FlyingStars count={1200} speed={1.5} size={0.04} color="#64748b" />
 
-                <Float speed={1.2} rotationIntensity={1} floatIntensity={1.5}>
-                    <mesh position={[-3, -1.5, -5]}>
-                        <dodecahedronGeometry args={[0.8]} />
-                        <meshStandardMaterial color="#a7f3d0" roughness={0.6} metalness={0.1} /> {/* Washed Emerald */}
-                    </mesh>
-                </Float>
+                {/* Mid layer - medium speed, slightly warmer gray */}
+                <FlyingStars count={600} speed={3.5} size={0.07} color="#94a3b8" />
 
-                <Float speed={1.4} rotationIntensity={1.2} floatIntensity={1.5}>
-                    <mesh position={[2, 2, -5]}>
-                        <icosahedronGeometry args={[0.9]} />
-                        <meshStandardMaterial color="#ddd6fe" roughness={0.6} metalness={0.1} /> {/* Washed Violet */}
-                    </mesh>
-                </Float>
+                {/* Foreground layer - fast, large, pale yellow/white */}
+                <FlyingStars count={300} speed={7} size={0.12} color="#fef3c7" />
 
-                <directionalLight position={[-5, 5, 5]} intensity={0.4} color="#ffffff" />
-
-                {/* Flying Space Stars with varying brightness/sizes to simulate forward movement */}
-                <FlyingStars count={800} speed={2} size={0.05} color="#94a3b8" opacity={0.4} />
-                <FlyingStars count={400} speed={4} size={0.08} color="#cbd5e1" opacity={0.6} />
-                <FlyingStars count={150} speed={8} size={0.12} color="#f8fafc" opacity={0.8} />
-
-                {/* Sparse washed-out sparkles drifting */}
-                <Sparkles count={50} scale={15} size={3} speed={0.4} opacity={0.3} color="#fef3c7" />
-                <Sparkles count={50} scale={15} size={4} speed={0.5} opacity={0.3} color="#e0e7ff" />
+                {/* Brightest/closest "hero" stars - very fast, prominent yellow */}
+                <FlyingStars count={100} speed={12} size={0.18} color="#fde047" />
 
                 <Environment preset="city" />
             </Canvas>
