@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAdminStats } from '../../lib/hooks/useAdminStats'
 import type { AdminUserOverview } from '../../lib/hooks/useAdminStats'
 import { Button } from '../../components/ui/Button'
-import { LogOut, ArrowLeft, Trophy, Flag, Timer, ChevronUp, ChevronDown } from 'lucide-react'
+import { LogOut, ArrowLeft, Trophy, Flag, Timer, ChevronUp, ChevronDown, Check } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 
 export function AdminDashboard() {
@@ -86,9 +86,57 @@ export function AdminDashboard() {
         return sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 shrink-0 ml-[2px]" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0 ml-[2px]" />
     }
 
+    type DetailsSortKey = 'level' | 'rank' | 'perfect_runs' | 'total_runs' | 'best_time'
+    const [detailsSortConfig, setDetailsSortConfig] = useState<{ key: DetailsSortKey, direction: 'desc' | 'asc' }>({ key: 'level', direction: 'asc' })
+
+    const requestDetailsSort = (key: DetailsSortKey) => {
+        let direction: 'desc' | 'asc' = 'desc'
+        if (detailsSortConfig.key === key && detailsSortConfig.direction === 'desc') {
+            direction = 'asc'
+        }
+        setDetailsSortConfig({ key, direction })
+    }
+
+    const sortedDetailsData = [...detailsData].sort((a, b) => {
+        const directionMultiplier = detailsSortConfig.direction === 'asc' ? 1 : -1
+
+        const compareNum = (valA: number, valB: number) => {
+            if (valA < valB) return -1
+            if (valA > valB) return 1
+            return 0
+        }
+
+        let result = 0;
+        if (detailsSortConfig.key === 'level') {
+            if (a.level_attempted !== b.level_attempted) result = compareNum(a.level_attempted, b.level_attempted)
+            else result = compareNum(a.perfect_runs, b.perfect_runs)
+        } else if (detailsSortConfig.key === 'rank') {
+            const rankA = a.global_rank || Infinity
+            const rankB = b.global_rank || Infinity
+            result = compareNum(rankA, rankB)
+        } else if (detailsSortConfig.key === 'perfect_runs') {
+            if (a.perfect_runs !== b.perfect_runs) result = compareNum(a.perfect_runs, b.perfect_runs)
+            else result = compareNum(a.level_attempted, b.level_attempted)
+        } else if (detailsSortConfig.key === 'total_runs') {
+            if (a.total_runs !== b.total_runs) result = compareNum(a.total_runs, b.total_runs)
+            else result = compareNum(a.level_attempted, b.level_attempted)
+        } else if (detailsSortConfig.key === 'best_time') {
+            const timeA = a.best_time_seconds || Infinity
+            const timeB = b.best_time_seconds || Infinity
+            result = compareNum(timeA, timeB)
+        }
+
+        return result * directionMultiplier
+    })
+
+    const DetailsSortIcon = ({ columnKey }: { columnKey: DetailsSortKey }) => {
+        if (detailsSortConfig.key !== columnKey) return null
+        return detailsSortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 shrink-0 ml-[2px]" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0 ml-[2px]" />
+    }
+
     return (
-        <div className="h-screen overflow-hidden bg-slate-900 text-slate-200 p-4 md:p-8 font-sans flex flex-col">
-            <div className="max-w-6xl mx-auto w-full flex flex-col h-full space-y-4 md:space-y-6">
+        <div className="h-screen overflow-hidden bg-slate-900 text-slate-200 p-2 md:p-4 font-sans flex flex-col">
+            <div className="max-w-6xl mx-auto w-full flex flex-col h-full space-y-2 md:space-y-4">
 
                 {/* Header */}
                 <div className="flex justify-between items-center px-2">
@@ -109,7 +157,7 @@ export function AdminDashboard() {
 
                     {/* VIEW 1: Overview */}
                     {!selectedUser && (
-                        <div className="p-4 md:p-6 flex-1 flex flex-col min-h-0">
+                        <div className="p-2 md:p-4 flex-1 flex flex-col min-h-0">
                             <div className="flex justify-between items-start mb-4 px-2">
                                 <Trophy className="text-emerald-400 w-5 h-5 shrink-0 mt-0.5" />
                                 <div className="flex flex-col items-center flex-1 px-4">
@@ -159,7 +207,7 @@ export function AdminDashboard() {
                                                     onClick={() => requestSort('perfect_runs')}
                                                 >
                                                     <div className="flex items-center justify-end gap-1">
-                                                        <span className="text-right inline-block">PERFECT</span>
+                                                        <Check className="w-4 h-4 inline-block" />
                                                         <SortIcon columnKey="perfect_runs" />
                                                     </div>
                                                 </th>
@@ -206,27 +254,27 @@ export function AdminDashboard() {
                     {selectedUser && (
                         <div className="flex-1 flex flex-col">
                             {/* Detail Header */}
-                            <div className="bg-slate-800 border-b border-slate-700 p-4 md:px-6 md:py-5 flex items-center justify-between">
+                            <div className="bg-slate-800 border-b border-slate-700 p-2 md:px-4 md:py-3 flex items-center justify-between">
+                                <Button variant="ghost" size="sm" onClick={handleBack} className="text-slate-400 hover:text-white px-1">
+                                    <ArrowLeft className="w-5 h-5 mr-1" />
+                                    Back
+                                </Button>
                                 <div className="flex items-center gap-4">
-                                    <Button variant="ghost" size="sm" onClick={handleBack} className="text-slate-400 hover:text-white px-2">
-                                        <ArrowLeft className="w-5 h-5 mr-1" />
-                                        Back
-                                    </Button>
-                                    <h2 className="text-xl md:text-2xl font-black text-amber-400 drop-shadow-sm tracking-wide">
+                                    <div className="hidden md:flex gap-4 text-sm font-medium">
+                                        <div className="px-3 py-1 bg-slate-900 rounded-lg border border-slate-700 flex gap-2 items-center text-slate-300">
+                                            <Flag className="w-4 h-4 text-slate-500" /> Total Runs: <span className="text-white font-mono">{selectedUser.total_runs}</span>
+                                        </div>
+                                        <div className="px-3 py-1 bg-emerald-950/30 rounded-lg border border-emerald-900/50 flex gap-2 items-center text-emerald-200">
+                                            <Trophy className="w-4 h-4 text-emerald-600" /> Perfect: <span className="text-emerald-400 font-mono">{selectedUser.total_perfect_runs}</span>
+                                        </div>
+                                    </div>
+                                    <h2 className="text-xl md:text-2xl font-black text-amber-400 drop-shadow-sm tracking-wide text-right">
                                         {selectedUser.username}
                                     </h2>
                                 </div>
-                                <div className="hidden md:flex gap-4 text-sm font-medium">
-                                    <div className="px-3 py-1 bg-slate-900 rounded-lg border border-slate-700 flex gap-2 items-center text-slate-300">
-                                        <Flag className="w-4 h-4 text-slate-500" /> Total Runs: <span className="text-white font-mono">{selectedUser.total_runs}</span>
-                                    </div>
-                                    <div className="px-3 py-1 bg-emerald-950/30 rounded-lg border border-emerald-900/50 flex gap-2 items-center text-emerald-200">
-                                        <Trophy className="w-4 h-4 text-emerald-600" /> Perfect: <span className="text-emerald-400 font-mono">{selectedUser.total_perfect_runs}</span>
-                                    </div>
-                                </div>
                             </div>
 
-                            <div className="p-4 md:p-6 flex-1">
+                            <div className="p-2 md:p-4 flex-1 flex flex-col min-h-0 relative">
                                 {isLoadingDetails ? (
                                     <div className="flex-1 flex justify-center items-center py-12">
                                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
@@ -236,53 +284,89 @@ export function AdminDashboard() {
                                         This player hasn't played any levels yet.
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {detailsData.map((stat) => {
-                                            const mins = stat.best_time_seconds ? Math.floor(stat.best_time_seconds / 60) : 0
-                                            const secs = stat.best_time_seconds ? stat.best_time_seconds % 60 : 0
-                                            const timeString = stat.best_time_seconds ? `${mins}:${secs.toString().padStart(2, '0')}` : '--:--'
-
-                                            return (
-                                                <div key={stat.level_attempted} className="bg-slate-800/80 border border-slate-700 p-5 rounded-xl hover:border-slate-600 transition-colors">
-
-                                                    <div className="flex justify-between items-start mb-4 border-b border-slate-700/50 pb-3">
-                                                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                                            <div className="bg-blue-600 w-6 h-6 rounded flex items-center justify-center text-xs">
-                                                                {stat.level_attempted}
-                                                            </div>
-                                                            Level {stat.level_attempted}
-                                                        </h3>
-                                                        {stat.global_rank && (
-                                                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 rounded shadow-inner">
-                                                                <span className="text-amber-500/70 text-xs">Rank</span>
-                                                                <span className="font-black text-amber-400 text-sm">#{stat.global_rank}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="space-y-3">
-                                                        <div className="flex justify-between items-center text-sm">
-                                                            <span className="text-slate-400">Total Attempts</span>
-                                                            <span className="font-mono text-slate-200">{stat.total_runs}</span>
+                                    <div className="absolute inset-0 overflow-y-auto mt-2 md:mt-4 mx-2 md:mx-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                        <table className="w-full text-left border-collapse table-auto">
+                                            <thead className="sticky top-0 bg-slate-800 z-10 shadow-sm border-b border-slate-700/80">
+                                                <tr className="text-slate-400 text-xs md:text-sm uppercase tracking-wider">
+                                                    <th
+                                                        className={`py-2 px-1 font-semibold cursor-pointer hover:bg-slate-700/50 transition-colors select-none w-[6ch] ${detailsSortConfig.key === 'level' ? 'text-blue-400' : ''}`}
+                                                        onClick={() => requestDetailsSort('level')}
+                                                    >
+                                                        <div className="flex items-center gap-0.5">
+                                                            <span>LEVEL</span>
+                                                            <DetailsSortIcon columnKey="level" />
                                                         </div>
-                                                        <div className="flex justify-between items-center text-sm">
-                                                            <span className="text-emerald-500/70">Perfect Runs</span>
-                                                            <span className="font-mono text-emerald-400 font-bold">{stat.perfect_runs}</span>
+                                                    </th>
+                                                    <th
+                                                        className={`py-2 px-1 font-semibold cursor-pointer hover:bg-slate-700/50 transition-colors select-none w-[6ch] ${detailsSortConfig.key === 'rank' ? 'text-blue-400' : ''}`}
+                                                        onClick={() => requestDetailsSort('rank')}
+                                                    >
+                                                        <div className="flex items-center justify-end gap-0.5">
+                                                            <span className="text-right inline-block">RANK</span>
+                                                            <DetailsSortIcon columnKey="rank" />
                                                         </div>
+                                                    </th>
+                                                    <th
+                                                        className={`py-2 px-1 font-semibold cursor-pointer hover:bg-slate-700/50 transition-colors select-none w-[6ch] ${detailsSortConfig.key === 'perfect_runs' ? 'text-blue-400' : ''}`}
+                                                        onClick={() => requestDetailsSort('perfect_runs')}
+                                                    >
+                                                        <div className="flex items-center justify-end gap-0.5">
+                                                            <Check className="w-4 h-4 inline-block" />
+                                                            <DetailsSortIcon columnKey="perfect_runs" />
+                                                        </div>
+                                                    </th>
+                                                    <th
+                                                        className={`py-2 px-1 font-semibold cursor-pointer hover:bg-slate-700/50 transition-colors select-none w-[6ch] ${detailsSortConfig.key === 'total_runs' ? 'text-blue-400' : ''}`}
+                                                        onClick={() => requestDetailsSort('total_runs')}
+                                                    >
+                                                        <div className="flex items-center justify-end gap-0.5">
+                                                            <span className="text-right inline-block">TOTAL</span>
+                                                            <DetailsSortIcon columnKey="total_runs" />
+                                                        </div>
+                                                    </th>
+                                                    <th
+                                                        className={`py-2 px-1 font-semibold cursor-pointer hover:bg-slate-700/50 transition-colors select-none w-[5ch] ${detailsSortConfig.key === 'best_time' ? 'text-blue-400' : ''}`}
+                                                        onClick={() => requestDetailsSort('best_time')}
+                                                    >
+                                                        <div className="flex items-center justify-end gap-0.5 text-right">
+                                                            <Timer className="w-4 h-4 inline-block" />
+                                                            <DetailsSortIcon columnKey="best_time" />
+                                                        </div>
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-700/30">
+                                                {sortedDetailsData.map((stat) => {
+                                                    const mins = stat.best_time_seconds ? Math.floor(stat.best_time_seconds / 60) : 0
+                                                    const secs = stat.best_time_seconds ? stat.best_time_seconds % 60 : 0
+                                                    const timeString = stat.best_time_seconds ? `${mins}:${secs.toString().padStart(2, '0')}` : '--:--'
 
-                                                        {stat.best_time_seconds && (
-                                                            <div className="mt-4 pt-3 border-t border-slate-700/30 flex justify-between items-center">
-                                                                <span className="text-blue-300/60 text-xs font-semibold uppercase tracking-wider flex items-center gap-1">
-                                                                    <Timer className="w-3 h-3" /> Best Time
-                                                                </span>
-                                                                <span className="font-mono font-bold text-blue-300">{timeString}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                </div>
-                                            )
-                                        })}
+                                                    return (
+                                                        <tr key={stat.level_attempted} className="hover:bg-slate-700/30 transition-colors group text-sm md:text-base">
+                                                            <td className="py-3 px-1 truncate min-w-0">
+                                                                <span className="font-semibold text-blue-300 transition-colors">L{stat.level_attempted}</span>
+                                                            </td>
+                                                            <td className="py-3 px-1 text-right">
+                                                                {stat.global_rank ? (
+                                                                    <span className="font-black text-amber-400 text-sm whitespace-nowrap">#{stat.global_rank}</span>
+                                                                ) : (
+                                                                    <span className="text-slate-600">-</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="py-3 px-1 text-right">
+                                                                <span className="font-mono text-emerald-400 font-bold">{stat.perfect_runs}</span>
+                                                            </td>
+                                                            <td className="py-3 px-1 text-right">
+                                                                <span className="font-mono text-slate-300">{stat.total_runs}</span>
+                                                            </td>
+                                                            <td className="py-3 px-1 text-right">
+                                                                <span className="font-mono font-bold text-blue-300">{stat.best_time_seconds ? timeString : '-'}</span>
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </div>

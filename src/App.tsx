@@ -85,10 +85,10 @@ function GameBoard() {
       <main className="z-10 flex-1 flex flex-col p-4 md:p-8">
 
         {/* Top Header / HUD */}
-        <header className="flex flex-col w-full max-w-5xl mx-auto gap-4 mb-4">
+        <header className="flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4 mb-2 sm:mb-4">
           {/* Logo centered at the top */}
           <div className="flex justify-center w-full">
-            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
+            <h1 className="text-2xl sm:text-3xl md:text-5xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
               VERBS QUEST
             </h1>
           </div>
@@ -120,14 +120,14 @@ function GameBoard() {
         </header>
 
         {/* Center Stage */}
-        <section className="flex-1 flex flex-col items-center justify-center w-full max-w-5xl mx-auto my-8">
+        <section className="flex-1 flex flex-col items-center justify-center w-full max-w-5xl mx-auto my-2 sm:my-8">
 
           {session.status === 'IDLE' && (
-            <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-2xl px-4">
-              <div className="text-center space-y-4 w-full">
-                <h2 className="text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-6">Quest Levels</h2>
+            <div className="flex flex-col items-center gap-3 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full max-w-md sm:max-w-2xl px-2 sm:px-4">
+              <div className="text-center space-y-2 sm:space-y-4 w-full">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">Quest Levels</h2>
 
-                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3 md:gap-4 w-full">
+                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full">
                   {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
                     const isLocked = lvl > levelCap
                     const isHighestUnlocked = lvl === levelCap
@@ -139,7 +139,7 @@ function GameBoard() {
                         disabled={isLocked || isLoading}
                         onClick={() => handleLevelClick(lvl)}
                         className={cn(
-                          "relative flex flex-col items-center justify-center aspect-square rounded-2xl transition-all duration-300 border-2 overflow-hidden shadow-lg group",
+                          "relative flex flex-col items-center justify-center aspect-square rounded-xl sm:rounded-2xl transition-all duration-300 border-2 overflow-hidden shadow-lg group",
                           isLocked ? "bg-slate-800/40 text-slate-500 border-slate-700 opacity-60 cursor-not-allowed" :
                             isHighestUnlocked ? "bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)] hover:scale-110 active:scale-95" :
                               "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:border-slate-500 hover:scale-105 active:scale-95",
@@ -149,22 +149,22 @@ function GameBoard() {
                         {isHighestUnlocked && (
                           <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-colors pointer-events-none" />
                         )}
-                        <span className="font-black text-2xl md:text-3xl z-10">{lvl}</span>
+                        <span className="font-black text-xl sm:text-2xl md:text-3xl z-10">{lvl}</span>
                       </button>
                     )
                   })}
                 </div>
 
-                <p className="text-lg text-blue-200/80 mt-6 font-medium">Tap an unlocked level to begin.</p>
+                <p className="text-base sm:text-lg text-blue-200/80 mt-3 sm:mt-6 font-medium">Tap an unlocked level to begin.</p>
 
                 {error && <p className="text-red-400 font-bold mt-2">Error loading verbs: {error}</p>}
               </div>
 
-              <div className="flex flex-col items-center mt-2 w-full">
+              <div className="flex flex-col items-center mt-1 sm:mt-2 w-full">
                 <Button
                   size="lg"
                   disabled={isLoading || questions.length === 0}
-                  className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center"
+                  className="text-lg sm:text-xl px-8 py-4 sm:px-12 sm:py-8 rounded-xl sm:rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center"
                   onClick={handleStartQuest}
                 >
                   {isLoading ? 'Loading...' : 'Start Quest'}
@@ -198,15 +198,15 @@ function GameBoard() {
           )}
 
           {session.status === 'PLAYING' && currentQ && (
-            <div className="w-full flex-1 flex flex-col items-center justify-center gap-12 animate-in zoom-in-95 duration-500 relative">
+            <div className="w-full flex-1 flex flex-col items-center justify-center gap-4 sm:gap-8 md:gap-12 animate-in zoom-in-95 duration-500 relative">
               {/* Countdown Modal Overlay over the gameplay screen */}
               {countdown !== null && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md rounded-2xl p-4">
-                  <div className="bg-slate-800/90 shadow-[0_0_60px_rgba(52,211,153,0.3)] rounded-[3rem] w-64 h-64 md:w-80 md:h-80 flex items-center justify-center border-[6px] border-emerald-500/80 backdrop-blur-xl overflow-hidden relative">
+                  <div className="bg-slate-800/90 shadow-[0_0_60px_rgba(52,211,153,0.3)] rounded-[3rem] w-48 h-48 sm:w-64 sm:h-64 md:w-80 md:h-80 flex items-center justify-center border-[6px] border-emerald-500/80 backdrop-blur-xl overflow-hidden relative">
                     {countdown > 0 && (
                       <div
                         key={countdown}
-                        className="text-[8rem] md:text-[12rem] font-black bg-gradient-to-br from-emerald-300 to-blue-400 bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(52,211,153,0.8)] animate-countdown-zoom"
+                        className="text-[6rem] sm:text-[8rem] md:text-[12rem] font-black bg-gradient-to-br from-emerald-300 to-blue-400 bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(52,211,153,0.8)] animate-countdown-zoom"
                       >
                         {countdown}
                       </div>
@@ -216,12 +216,12 @@ function GameBoard() {
               )}
 
               {/* Question Card */}
-              <div className="text-center space-y-4">
-                <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 text-sm font-bold uppercase tracking-widest shadow-inner">
+              <div className="text-center space-y-2 sm:space-y-4">
+                <div className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 text-xs sm:text-sm font-bold uppercase tracking-widest shadow-inner">
                   {currentQ.tense.replace('_', ' ')}
                 </div>
                 {/* Prompting the player with the infinitive loaded directly from Supabase */}
-                <h2 className="text-5xl md:text-7xl font-black text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] tracking-tight uppercase">
+                <h2 className="text-4xl sm:text-5xl md:text-7xl font-black text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] tracking-tight uppercase">
                   {currentQ.infinitive}
                 </h2>
               </div>
@@ -235,23 +235,23 @@ function GameBoard() {
                   gameplay.feedbackState === 'INCORRECT' ? "bg-red-500 opacity-75 animate-pulse" : ""
                 )}></div>
                 <div className={cn(
-                  "relative h-20 md:h-24 w-64 md:w-96 bg-slate-900 border-2 rounded-xl flex items-center justify-center overflow-hidden shadow-2xl transition-colors duration-300",
+                  "relative h-16 sm:h-20 md:h-24 w-60 sm:w-64 md:w-96 bg-slate-900 border-2 rounded-xl flex items-center justify-center overflow-hidden shadow-2xl transition-colors duration-300",
                   gameplay.feedbackState === 'NONE' ? "border-slate-700" : "",
                   gameplay.feedbackState === 'CORRECT' ? "border-emerald-500 bg-emerald-950/30" : "",
                   gameplay.feedbackState === 'INCORRECT' ? "border-red-500 bg-red-950/30" : ""
                 )}>
                   {gameplay.currentInput ? (
                     <span className={cn(
-                      "text-4xl md:text-5xl font-mono font-bold tracking-widest",
+                      "text-3xl sm:text-4xl md:text-5xl font-mono font-bold tracking-widest",
                       gameplay.feedbackState === 'CORRECT' ? "text-emerald-400" : gameplay.feedbackState === 'INCORRECT' ? "text-red-400 line-through decoration-red-500/50" : "text-white"
                     )}>
                       {gameplay.currentInput}
                     </span>
                   ) : (
-                    <span className="text-4xl md:text-5xl font-mono font-bold text-slate-600 tracking-widest animate-pulse">TYPE...</span>
+                    <span className="text-3xl sm:text-4xl md:text-5xl font-mono font-bold text-slate-600 tracking-widest animate-pulse">TYPE...</span>
                   )}
                   {/* Blinking Cursor */}
-                  {gameplay.feedbackState === 'NONE' && <div className="h-10 w-1 bg-blue-500 ml-1 animate-pulse" />}
+                  {gameplay.feedbackState === 'NONE' && <div className="h-8 sm:h-10 w-1 bg-blue-500 ml-1 animate-pulse" />}
                 </div>
               </div>
 
@@ -260,7 +260,7 @@ function GameBoard() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowCancelModal(true)}
-                className="mt-2 text-sm font-bold border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-950/30 transition-all tracking-wide"
+                className="mt-0 sm:mt-2 text-xs sm:text-sm font-bold border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-950/30 transition-all tracking-wide"
               >
                 Cancel Run
               </Button>
@@ -409,7 +409,7 @@ function GameBoard() {
 
         {/* Keyboard Footer */}
         {session.status === 'PLAYING' && (
-          <div className={cn("w-full pb-4 transition-opacity duration-300", countdown !== null ? "opacity-50 pointer-events-none" : "animate-in slide-in-from-bottom-24 duration-500")}>
+          <div className={cn("w-full pb-2 md:pb-4 transition-opacity duration-300", countdown !== null ? "opacity-50 pointer-events-none" : "animate-in slide-in-from-bottom-24 duration-500")}>
             <VirtualKeyboard />
           </div>
         )}

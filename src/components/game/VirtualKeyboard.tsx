@@ -76,7 +76,7 @@ export function VirtualKeyboard() {
     }, [feedbackState, advanceQuestion])
 
     return (
-        <div className="relative w-full max-w-3xl mx-auto p-3 bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col justify-center">
+        <div className="relative w-full max-w-3xl mx-auto p-2 sm:p-3 bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col justify-center">
 
             {/* Visual Feedback Overlay (Absolute) */}
             <div className={cn(
@@ -109,7 +109,7 @@ export function VirtualKeyboard() {
 
             {/* Keyboard Grid */}
             <div className={cn(
-                "flex flex-col gap-2 w-full transition-opacity duration-300",
+                "flex flex-col gap-1 sm:gap-2 w-full transition-opacity duration-300",
                 feedbackState !== 'NONE' && "opacity-0 pointer-events-none"
             )}>
                 {/* Row 1: Vowels */}
@@ -118,7 +118,7 @@ export function VirtualKeyboard() {
                         <Button
                             key={key}
                             variant="outline"
-                            className="w-10 h-14 sm:w-14 sm:h-16 text-lg sm:text-2xl font-bold bg-indigo-900/40 border-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:border-indigo-400 transition-all shadow-md px-0"
+                            className="w-10 h-12 sm:w-14 sm:h-16 text-lg sm:text-2xl font-bold bg-indigo-900/40 border-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:border-indigo-400 transition-all shadow-md px-0"
                             onClick={() => handleKeyPress(key)}
                         >
                             {key}
@@ -132,7 +132,7 @@ export function VirtualKeyboard() {
                         <Button
                             key={key}
                             variant="outline"
-                            className="flex-1 max-w-[3rem] min-w-0 px-0 h-12 sm:h-14 text-base sm:text-xl font-bold bg-slate-800/80 border-slate-600 text-slate-100 hover:bg-slate-600 hover:border-slate-400 transition-all shadow-md active:scale-95"
+                            className="flex-1 max-w-[3rem] min-w-0 px-0 h-11 sm:h-14 text-base sm:text-xl font-bold bg-slate-800/80 border-slate-600 text-slate-100 hover:bg-slate-600 hover:border-slate-400 transition-all shadow-md active:scale-95"
                             onClick={() => handleKeyPress(key)}
                         >
                             {key}
