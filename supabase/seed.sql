@@ -141,4 +141,90 @@ INSERT INTO public.verbs (infinitive, past_simple, past_participle, level_group,
 ('win', 'won', 'won', 18, true),
 ('write', 'wrote', 'written', 18, true);
 
+-- Enable pgcrypto for password hashing in auth.users
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+DO $$
+DECLARE
+    v_admin_id UUID := gen_random_uuid();
+    v_student_ids UUID[] := ARRAY[]::UUID[];
+    v_student_id UUID;
+    v_i INT;
+    v_level INT;
+    v_runs INT;
+    v_duration INT;
+    v_is_perfect BOOLEAN;
+    v_errors INT;
+BEGIN
+    -- 1. Create Admin User
+    INSERT INTO auth.users (
+        id, instance_id, aud, email, encrypted_password, email_confirmed_at, 
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, is_super_admin,
+        confirmation_token, recovery_token, email_change_token_new, email_change
+    )
+    VALUES (
+        v_admin_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'admin@verbsquest.com', 
+        crypt('password123', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, 
+        '{"full_name":"admin"}'::jsonb, now(), now(), 'authenticated', false,
+        '', '', '', ''
+    );
+    
+    -- The trigger automatically creates the row, so we just update it
+    UPDATE public.users 
+    SET role = 'admin', current_level_cap = 18 
+    WHERE id = v_admin_id;
+
+    -- 2. Create 30 Students
+    FOR v_i IN 1..30 LOOP
+        v_student_id := gen_random_uuid();
+        v_student_ids := array_append(v_student_ids, v_student_id);
+        
+        INSERT INTO auth.users (
+            id, instance_id, aud, email, encrypted_password, email_confirmed_at, 
+            raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, is_super_admin,
+            confirmation_token, recovery_token, email_change_token_new, email_change
+        )
+        VALUES (
+            v_student_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'student'||v_i||'@verbsquest.com', 
+            crypt('password123', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, 
+            ('{"full_name":"Student '||v_i||'"}')::jsonb, now(), now(), 'authenticated', false,
+            '', '', '', ''
+        );
+        
+        -- Random level cap between 1 and 18, trigger already made the row
+        UPDATE public.users 
+        SET current_level_cap = floor(random() * 18 + 1)::int
+        WHERE id = v_student_id;
+    END LOOP;
+
+    -- 3. Create Hundreds of Game Sessions
+    FOREACH v_student_id IN ARRAY v_student_ids LOOP
+        -- Generate between 10 and 30 sessions per student
+        FOR v_runs IN 1..(floor(random() * 21 + 10)::int) LOOP
+            -- Random level between 1 and 18
+            v_level := floor(random() * 18 + 1)::int;
+            
+            -- 70% chance of perfect run
+            IF random() < 0.70 THEN
+                v_is_perfect := true;
+                v_errors := 0;
+                v_duration := floor(random() * 60 + 20)::int; -- 20s to 80s
+            ELSE
+                v_is_perfect := false;
+                v_errors := floor(random() * 5 + 1)::int; -- 1 to 5 errors
+                v_duration := floor(random() * 120 + 40)::int; -- 40s to 160s
+            END IF;
+            
+            INSERT INTO public.game_sessions (
+                user_id, level_attempted, errors_count, duration_seconds, 
+                is_perfect_run, client_timestamp_start, client_timestamp_end, completed_at
+            ) VALUES (
+                v_student_id, v_level, v_errors, v_duration,
+                v_is_perfect, now() - interval '1 hour', now(), now() - (random() * interval '30 days')
+            );
+        END LOOP;
+    END LOOP;
+END;
+$$;
+
 

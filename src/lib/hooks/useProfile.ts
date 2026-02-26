@@ -5,6 +5,7 @@ import { useAuth } from '../../features/auth/AuthContext'
 export function useProfile() {
     const { user } = useAuth()
     const [levelCap, setLevelCap] = useState<number>(1)
+    const [role, setRole] = useState<'student' | 'admin'>('student')
     const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
     useEffect(() => {
@@ -18,12 +19,13 @@ export function useProfile() {
             try {
                 const { data, error } = await supabase
                     .from('users')
-                    .select('current_level_cap')
+                    .select('current_level_cap, role')
                     .eq('id', user.id)
                     .single()
 
                 if (data && !error) {
                     setLevelCap(data.current_level_cap || 1)
+                    setRole(data.role as 'student' | 'admin' || 'student')
                 }
             } catch (err) {
                 console.error("Failed to fetch profile", err)
@@ -35,5 +37,5 @@ export function useProfile() {
         fetchProfile()
     }, [user])
 
-    return { levelCap, isLoadingProfile }
+    return { levelCap, role, isLoadingProfile }
 }

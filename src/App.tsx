@@ -12,12 +12,13 @@ import { cn } from './lib/utils/cn'
 import { useVerbs } from './lib/hooks/useVerbs'
 import { useProfile } from './lib/hooks/useProfile'
 import { useTotalLevels } from './lib/hooks/useTotalLevels'
+import { AdminDashboard } from './features/admin/AdminDashboard'
 
 function GameBoard() {
   const { session, gameplay, startGame, startLevelTimer, cancelGame } = useGameStore()
   const { user, signOut } = useAuth()
 
-  const { levelCap, isLoadingProfile } = useProfile()
+  const { levelCap, role, isLoadingProfile } = useProfile()
   const { totalLevels, isLoadingTotalLevels } = useTotalLevels()
   const [selectedLevel, setSelectedLevel] = useState<number>(1)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -52,6 +53,11 @@ function GameBoard() {
   const handleStartQuest = () => {
     startGame(selectedLevel, questions, true)
     setCountdown(3)
+  }
+
+  // Admin Override Route
+  if (!isLoadingProfile && role === 'admin') {
+    return <AdminDashboard />
   }
 
   if (isLoadingProfile || isLoadingTotalLevels) {
