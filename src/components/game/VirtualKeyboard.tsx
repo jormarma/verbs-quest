@@ -100,7 +100,8 @@ export function VirtualKeyboard() {
                     </div>
                 )}
                 <Button
-                    className="w-full max-w-sm h-14 mt-4 text-lg font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] animate-bounce"
+                    variant="default"
+                    className="w-full max-w-sm h-14 mt-4 text-lg font-bold animate-bounce"
                     onClick={advanceQuestion}
                 >
                     NEXT QUESTION
@@ -117,8 +118,8 @@ export function VirtualKeyboard() {
                     {VOWELS.map((key) => (
                         <Button
                             key={key}
-                            variant="outline"
-                            className="w-10 h-12 sm:w-14 sm:h-16 text-lg sm:text-2xl font-bold bg-indigo-900/40 border-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:border-indigo-400 transition-all shadow-md px-0"
+                            variant="secondary"
+                            className="w-10 h-12 sm:w-14 sm:h-16 text-lg sm:text-2xl font-bold px-0"
                             onClick={() => handleKeyPress(key)}
                         >
                             {key}
@@ -131,8 +132,8 @@ export function VirtualKeyboard() {
                     {dynamicConsonants.map((key) => (
                         <Button
                             key={key}
-                            variant="outline"
-                            className="flex-1 max-w-[3rem] min-w-0 px-0 h-11 sm:h-14 text-base sm:text-xl font-bold bg-slate-800/80 border-slate-600 text-slate-100 hover:bg-slate-600 hover:border-slate-400 transition-all shadow-md active:scale-95"
+                            variant="secondary"
+                            className="flex-1 max-w-[3rem] min-w-0 px-0 h-11 sm:h-14 text-base sm:text-xl font-bold"
                             onClick={() => handleKeyPress(key)}
                         >
                             {key}
@@ -144,16 +145,16 @@ export function VirtualKeyboard() {
                 <div className="flex justify-center gap-2 sm:gap-4 mt-2">
                     <Button
                         variant="destructive"
-                        className="h-12 sm:h-14 flex-[0.3] max-w-[100px] bg-slate-700 hover:bg-red-600 border-none"
+                        className="h-12 sm:h-14 flex-[0.3] max-w-[100px]"
                         onClick={handleDelete}
                     >
                         <Delete size={20} className="sm:w-6 sm:h-6" />
                     </Button>
                     <Button
-                        variant="secondary"
+                        variant="default"
                         onClick={handleEnter}
                         disabled={currentInput.trim().length === 0}
-                        className="h-12 sm:h-14 flex-[0.7] max-w-[250px] font-bold text-base sm:text-lg bg-emerald-600 hover:bg-emerald-500 text-white border-none disabled:bg-emerald-900/30 disabled:text-emerald-700/50"
+                        className="h-12 sm:h-14 flex-[0.7] max-w-[250px] font-bold text-base sm:text-lg"
                     >
                         ENTER
                     </Button>

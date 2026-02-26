@@ -137,8 +137,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                         <Button
                             type="submit"
+                            variant="default"
                             disabled={isLoadingAuth}
-                            className="w-full mt-6 h-12 text-lg font-bold bg-blue-600 hover:bg-blue-500 shadow-lg hover:shadow-blue-500/25 transition-all text-white"
+                            className="w-full mt-6 h-12 text-lg font-bold"
                         >
                             {isLoadingAuth ? '...' : (isRegistering ? 'Create Profile' : 'Play Now')}
                         </Button>

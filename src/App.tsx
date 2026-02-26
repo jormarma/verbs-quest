@@ -115,7 +115,7 @@ function GameBoard() {
                   </span>
                   <button
                     onClick={signOut}
-                    className="ml-1 text-slate-400 hover:text-red-400 transition-colors p-1 rounded-full hover:bg-slate-700/50 flex-shrink-0"
+                    className="ml-1 text-slate-400 hover:text-red-400 transition-colors p-1 rounded-md hover:bg-slate-700/50 flex-shrink-0"
                     title={t('auth.signout')}
                   >
                     <LogOut className="w-3.5 h-3.5" />
@@ -146,11 +146,11 @@ function GameBoard() {
                         disabled={isLocked || isLoading}
                         onClick={() => handleLevelClick(lvl)}
                         className={cn(
-                          "relative flex flex-col items-center justify-center aspect-square rounded-xl sm:rounded-2xl transition-all duration-300 border-2 overflow-hidden shadow-lg group",
-                          isLocked ? "bg-slate-800/40 text-slate-500 border-slate-700 opacity-60 cursor-not-allowed" :
-                            isHighestUnlocked ? "bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)] hover:scale-110 active:scale-95" :
-                              "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:border-slate-500 hover:scale-105 active:scale-95",
-                          isSelected && !isLocked && "ring-4 ring-offset-2 ring-offset-slate-900 ring-blue-500 scale-105 border-transparent!"
+                          "relative flex flex-col items-center justify-center aspect-square rounded-md transition-all duration-300 border-2 overflow-hidden shadow-sm group",
+                          isLocked ? "bg-slate-800 opacity-50 text-slate-500 border-slate-700 pointer-events-none" :
+                            isHighestUnlocked ? "bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] hover:-translate-y-1 hover:shadow-lg" :
+                              "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600 hover:-translate-y-1 hover:shadow-lg active:scale-95",
+                          isSelected && !isLocked && "ring-4 ring-offset-2 ring-offset-slate-900 ring-white scale-105 border-transparent!"
                         )}
                       >
                         {isHighestUnlocked && (
@@ -170,8 +170,9 @@ function GameBoard() {
               <div className="flex flex-col items-center mt-1 sm:mt-2 w-full">
                 <Button
                   size="lg"
+                  variant="default"
                   disabled={isLoading || questions.length === 0}
-                  className="text-lg sm:text-xl px-8 py-4 sm:px-12 sm:py-8 rounded-xl sm:rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl hover:shadow-2xl hover:scale-105 transition-all outline outline-4 outline-offset-4 outline-transparent hover:outline-blue-500/50 flex items-center"
+                  className="text-lg sm:text-xl px-8 py-4 sm:px-12 sm:py-8 flex items-center"
                   onClick={handleStartQuest}
                 >
                   {isLoading ? t('quest.loading') : t('quest.start')}
@@ -191,7 +192,7 @@ function GameBoard() {
                     {t('quest.keep_playing')}
                   </Button>
                   <Button
-                    className="bg-rose-600 hover:bg-rose-500 text-white border-transparent"
+                    variant="destructive"
                     onClick={() => {
                       setShowCancelModal(false)
                       cancelGame()
@@ -269,10 +270,9 @@ function GameBoard() {
 
               {/* Cancel Button (Middle Area) */}
               <Button
-                variant="outline"
-                size="sm"
+                variant="destructive"
                 onClick={() => setShowCancelModal(true)}
-                className="mt-0 sm:mt-2 text-xs sm:text-sm font-bold border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-950/30 transition-all tracking-wide"
+                className="mt-0 sm:mt-2 text-xs sm:text-sm font-bold tracking-wide"
               >
                 {t('quest.cancel_run')}
               </Button>
@@ -411,7 +411,7 @@ function GameBoard() {
               <Button
                 onClick={() => window.location.reload()}
                 className="mt-4"
-                variant="outline"
+                variant="default"
               >
                 {t('btn.continue')}
               </Button>
