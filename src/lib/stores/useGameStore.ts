@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { submitLevelAttempt } from '../utils/sync'
 
 export type GameStatus = "IDLE" | "PLAYING" | "PAUSED" | "FINISHED"
+export type SubmissionStatus = "unlocked" | "maintained" | "downgraded" | "rejected" | null
 
 export interface VerbQuestion {
     verbId: string
@@ -40,6 +41,8 @@ export interface GameState {
         feedbackState: "NONE" | "CORRECT" | "INCORRECT"
         feedbackTarget: string | null
         topScores: any[]
+        submissionStatus: SubmissionStatus
+        submissionNewLevel: number | null
     }
 
     // Actions
@@ -76,7 +79,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         errorsInLevel: 0,
         feedbackState: "NONE",
         feedbackTarget: null,
-        topScores: []
+        topScores: [],
+        submissionStatus: null,
+        submissionNewLevel: null
     },
 
     startGame: (level, questions, delayTimer = false) => set({
@@ -99,7 +104,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             errorsInLevel: 0,
             feedbackState: "NONE",
             feedbackTarget: null,
-            topScores: []
+            topScores: [],
+            submissionStatus: null,
+            submissionNewLevel: null
         }
     }),
 
@@ -169,8 +176,23 @@ export const useGameStore = create<GameState>((set, get) => ({
                 errorCount: state.gameplay.errorsInLevel,
                 questionsCount: state.gameplay.mainQueue.length
             }).then(res => {
-                if (res.success && res.topScores) {
-                    get().setTopScores(res.topScores)
+                if (res.success) {
+                    set((current) => ({
+                        gameplay: {
+                            ...current.gameplay,
+                            topScores: res.topScores || [],
+                            submissionStatus: res.data?.status ?? null,
+                            submissionNewLevel: typeof res.data?.new_level === 'number' ? res.data.new_level : null
+                        }
+                    }))
+                } else if (res.rejected) {
+                    set((current) => ({
+                        gameplay: {
+                            ...current.gameplay,
+                            submissionStatus: "rejected",
+                            submissionNewLevel: null
+                        }
+                    }))
                 }
             })
         }
@@ -216,7 +238,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             errorsInLevel: 0,
             feedbackState: "NONE",
             feedbackTarget: null,
-            topScores: []
+            topScores: [],
+            submissionStatus: null,
+            submissionNewLevel: null
         }
     }),
 
@@ -231,7 +255,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             errorsInLevel: 0,
             feedbackState: "NONE",
             feedbackTarget: null,
-            topScores: []
+            topScores: [],
+            submissionStatus: null,
+            submissionNewLevel: null
         }
     })),
 

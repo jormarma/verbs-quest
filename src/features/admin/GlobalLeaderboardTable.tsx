@@ -121,6 +121,9 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
           <table className="w-full text-left border-collapse table-fixed">
             <thead className="sticky top-0 bg-slate-800 z-10 shadow-sm border-b border-slate-700/80">
               <tr className="text-slate-400 text-xs md:text-base uppercase tracking-wider">
+                <th className="py-2 px-1 md:px-2 font-semibold w-[44px] md:w-[52px] text-right">
+                  <span className="inline-block text-right w-full">#</span>
+                </th>
                 <th
                   className={`py-2 px-2 font-semibold cursor-pointer hover:bg-slate-700/50 transition-colors select-none ${sortConfig.key === 'name' ? 'text-blue-400' : ''}`}
                   onClick={() => requestSort('name')}
@@ -160,7 +163,7 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/30">
-              {sortedOverviewData.map((user) => {
+              {sortedOverviewData.map((user, index) => {
                 const isClickable = Boolean(onSelectUser)
                 return (
                   <tr
@@ -168,6 +171,9 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
                     onClick={isClickable ? () => onSelectUser(user) : undefined}
                     className={`transition-colors group text-sm md:text-base ${isClickable ? 'hover:bg-slate-700/30 cursor-pointer' : ''}`}
                   >
+                    <td className="py-3 px-1 md:px-2 text-right">
+                      <span className="font-mono text-slate-400 font-bold">{index + 1}</span>
+                    </td>
                     <td className="py-3 px-2 truncate min-w-0">
                       <span className="font-semibold text-blue-300 transition-colors group-hover:text-amber-400">{user.username}</span>
                     </td>

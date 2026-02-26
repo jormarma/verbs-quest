@@ -98,6 +98,15 @@ function GameBoard() {
       ? gameplay.mainQueue[gameplay.currentQuestionIndex]
       : gameplay.retryQueue[gameplay.currentQuestionIndex - gameplay.mainQueue.length]
   ) : null
+  const hasServerSubmission = gameplay.submissionStatus !== null
+  const isServerPerfect = gameplay.submissionStatus === 'unlocked'
+  const isFailedRun = hasServerSubmission
+    ? (gameplay.submissionStatus === 'downgraded' || gameplay.submissionStatus === 'rejected')
+    : gameplay.errorsInLevel >= 100
+  const isPerfectRun = hasServerSubmission ? isServerPerfect : gameplay.errorsInLevel === 0
+  const unlockedByThisRun = hasServerSubmission
+    ? (gameplay.submissionStatus === 'unlocked' && gameplay.submissionNewLevel === session.level + 1)
+    : session.level >= levelCap
 
   return (
     <div className="relative h-[100dvh] w-full font-sans text-slate-100 overflow-hidden flex flex-col">
@@ -398,29 +407,29 @@ function GameBoard() {
 
           {session.status === 'FINISHED' && (
             <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-700 w-full">
-              {gameplay.errorsInLevel === 0 && session.level === 18 ? (
+              {isPerfectRun && session.level === 18 ? (
                 <div className="flex flex-col items-center animate-bounce">
                   <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-emerald-400 to-yellow-300 drop-shadow-[0_0_15px_rgba(252,211,77,0.8)]">
                     {t('quest.incredible')}
                   </h2>
                   <p className="text-xl md:text-2xl font-bold mt-2 text-emerald-300 drop-shadow-sm">{t('quest.mastered_all')}</p>
                 </div>
-              ) : gameplay.errorsInLevel < 100 ? (
+              ) : !isFailedRun ? (
                 <h2 className="text-4xl md:text-5xl text-center font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)] leading-tight">{t('quest.level_complete')}</h2>
               ) : (
                 <h2 className="text-4xl md:text-5xl text-center font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)] leading-tight">{t('quest.level_failed')}</h2>
               )}
 
               <div className="bg-slate-800/80 p-4 md:p-6 rounded-2xl border border-slate-700 shadow-xl text-center space-y-2 max-w-lg w-full">
-                {gameplay.errorsInLevel === 0 ? (
+                {isPerfectRun ? (
                   session.level === 18 ? (
                     <p className="text-xl md:text-2xl text-yellow-300 font-bold">{t('quest.perfect_master')}</p>
-                  ) : session.level < levelCap ? (
-                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">{t('quest.perfect_practice')}</p>
-                  ) : (
+                  ) : unlockedByThisRun ? (
                     <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">{t('quest.perfect_unlocked')}</p>
+                  ) : (
+                    <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">{t('quest.perfect_practice')}</p>
                   )
-                ) : gameplay.errorsInLevel < 100 ? (
+                ) : !isFailedRun ? (
                   <div className="flex flex-col gap-1.5 md:gap-2">
                     <p className="text-lg md:text-xl text-slate-300">{t('quest.errors_made', { count: gameplay.errorsInLevel })}</p>
                     <p className="text-sm md:text-base text-yellow-400 font-bold">{t('quest.need_perfect')}</p>
@@ -438,7 +447,7 @@ function GameBoard() {
               </div>
 
               {/* Leaderboard Section */}
-              {gameplay.errorsInLevel < 100 && (
+              {!isFailedRun && (
                 <div className="w-full max-w-lg bg-slate-900/60 backdrop-blur border border-slate-700 p-4 md:p-6 rounded-2xl shadow-xl mt-2 md:mt-4">
                   <h3 className="text-xl md:text-2xl font-black text-emerald-400 mb-3 md:mb-4 text-center uppercase tracking-widest drop-shadow-sm border-b border-slate-700/50 pb-2">{t('leaderboard.top3')}</h3>
                   {gameplay.topScores.length === 0 ? (
@@ -497,7 +506,7 @@ function GameBoard() {
                         if (!isRunInTop3 && currentDuration !== null) {
                           const mins = Math.floor(currentDuration / 60);
                           const secs = currentDuration % 60;
-                          const isPerfect = gameplay.errorsInLevel === 0;
+                          const isPerfect = isPerfectRun;
                           return (
                             <div className="mt-4 pt-4 border-t border-slate-700/50">
                               <span className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 block text-center">{t('leaderboard.your_last')}</span>
