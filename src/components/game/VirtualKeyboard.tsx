@@ -8,6 +8,39 @@ import { cn } from '../../lib/utils/cn'
 const VOWELS = ['A', 'E', 'I', 'O', 'U']
 const ALL_CONSONANTS = 'BCDFGHJKLMNPQRSTVWXYZ'.split('')
 
+function getDeterministicExtras(seedSource: string, pool: string[], count: number): string[] {
+    if (pool.length === 0 || count <= 0) return []
+
+    const seed = seedSource.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    const picked: string[] = []
+    const step = 7
+    let index = seed % pool.length
+    let attempts = 0
+    const maxAttempts = pool.length * 2
+
+    while (picked.length < count && attempts < maxAttempts) {
+        const candidate = pool[index % pool.length]
+        if (!picked.includes(candidate)) {
+            picked.push(candidate)
+        }
+        index += step
+        attempts += 1
+    }
+
+    if (picked.length < count) {
+        for (const char of pool) {
+            if (!picked.includes(char)) {
+                picked.push(char)
+            }
+            if (picked.length === count) {
+                break
+            }
+        }
+    }
+
+    return picked
+}
+
 export function VirtualKeyboard() {
     const { gameplay, session, setInput, submitAnswer, advanceQuestion } = useGameStore()
     const { t } = useTranslation()
@@ -23,7 +56,7 @@ export function VirtualKeyboard() {
     // 1. the buttons for the letters must be in 2 rows. 
     // The first with vowels. 
     // The second with consonants. 
-    // The consonants must be just the needed ones to form the present, past simple and past participle of the verb in the question plus two random consonants more.
+    // The consonants must be the needed ones to form the present, past simple and past participle of the verb plus two extra consonants.
     const dynamicConsonants = useMemo(() => {
         if (!currentQ) return []
 
@@ -32,14 +65,16 @@ export function VirtualKeyboard() {
         const pastParticiple = currentQ.pastParticiple || ''
 
         const allNeededLetters = (infinitive + pastSimple + pastParticiple).toUpperCase().split('')
-        const neededConsonants = Array.from(new Set(allNeededLetters.filter(char => !VOWELS.includes(char))))
+        const neededConsonants = Array.from(
+            new Set(
+                allNeededLetters.filter((char) => /[A-Z]/.test(char) && !VOWELS.includes(char))
+            )
+        )
 
-        // Add two random extra consonants not already in the needed list
+        // Add two deterministic extra consonants not already in the needed list
         const availableExtras = ALL_CONSONANTS.filter(c => !neededConsonants.includes(c))
-
-        // Shuffle and pick 2
-        const shuffledExtras = [...availableExtras].sort(() => 0.5 - Math.random())
-        const selectedExtras = shuffledExtras.slice(0, 2)
+        const seedSource = `${currentQ.verbId}|${currentQ.infinitive}|${currentQ.pastSimple}|${currentQ.pastParticiple}|${currentQ.tense}`
+        const selectedExtras = getDeterministicExtras(seedSource, availableExtras, 2)
 
         // Combine and sort alphabetically for consistency so it looks like a keyboard
         return [...neededConsonants, ...selectedExtras].sort()

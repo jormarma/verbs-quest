@@ -15,6 +15,7 @@ export function useTotalLevels() {
                 const { data, error } = await supabase
                     .from('verbs')
                     .select('level_group')
+                    .eq('active', true)
                     .order('level_group', { ascending: false })
                     .limit(1)
 

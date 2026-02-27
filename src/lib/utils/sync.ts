@@ -45,9 +45,10 @@ export async function submitLevelAttempt(payload: LevelAttemptPayload) {
         console.log('Level attempt submitted successfully:', data)
         return { success: true, queued: false, data, topScores: data.top_scores }
 
-    } catch (e: any) {
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e)
         console.error('Failed to submit level attempt:', e)
-        return { success: false, error: e.message }
+        return { success: false, error: message }
     }
 }
 

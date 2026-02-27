@@ -26,6 +26,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const passwordInputRef = useRef<HTMLInputElement>(null)
     const repeatPasswordInputRef = useRef<HTMLInputElement>(null)
 
+    const getErrorMessage = (error: unknown) => {
+        if (error instanceof Error) return error.message
+        return String(error)
+    }
+
     const resetAuthForm = () => {
         setUsername('')
         setPassword('')
@@ -121,8 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setPassword('')
             setRepeatPassword('')
             setAuthError('')
-        } catch (error: any) {
-            let msg = error.message
+        } catch (error: unknown) {
+            let msg = getErrorMessage(error)
             // Aggressively sanitize the error message so the illusion is maintained
             msg = msg.replace(simulatedEmail, `"${username}"`)
             msg = msg.replace(/email/gi, 'username')

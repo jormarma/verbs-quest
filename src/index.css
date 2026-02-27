@@ -44,3 +44,54 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+.admin-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(30, 64, 175, 0.9), rgba(59, 130, 246, 0.95));
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.admin-slider:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 4px;
+}
+
+.admin-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(51, 65, 85, 0.9);
+}
+
+.admin-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 28px;
+  border-radius: 7px;
+  background: #2563eb;
+  border: none;
+  margin-top: -10px;
+  box-shadow: 0 0 0 1px rgba(30, 58, 138, 0.45), 0 4px 10px rgba(37, 99, 235, 0.4);
+}
+
+.admin-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(51, 65, 85, 0.9);
+}
+
+.admin-slider::-moz-range-thumb {
+  width: 14px;
+  height: 28px;
+  border-radius: 7px;
+  background: #2563eb;
+  border: none;
+  box-shadow: 0 0 0 1px rgba(30, 58, 138, 0.45), 0 4px 10px rgba(37, 99, 235, 0.4);
+}

@@ -12,6 +12,7 @@ import { cn } from './lib/utils/cn'
 import { useVerbs } from './lib/hooks/useVerbs'
 import { useProfile } from './lib/hooks/useProfile'
 import { useTotalLevels } from './lib/hooks/useTotalLevels'
+import { useAppSettings } from './lib/hooks/useAppSettings'
 import { AdminDashboard } from './features/admin/AdminDashboard'
 import { GlobalLeaderboardTable } from './features/admin/GlobalLeaderboardTable'
 
@@ -26,21 +27,25 @@ function GameBoard() {
 
   const { levelCap, role, isLoadingProfile } = useProfile()
   const { totalLevels, isLoadingTotalLevels } = useTotalLevels()
+  const { settings } = useAppSettings()
   const [selectedLevel, setSelectedLevel] = useState<number>(1)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
   const [lobbyView, setLobbyView] = useState<'menu' | 'play' | 'leaderboard'>('menu')
   const prevStatusRef = useRef(session.status)
+  const effectiveTotalLevels = totalLevels > 0 ? totalLevels : 1
+  const effectiveLevelCap = Math.max(1, Math.min(levelCap, effectiveTotalLevels))
+  const levelToPlay = Math.max(1, Math.min(selectedLevel, effectiveTotalLevels))
 
   // Sync selected level to max unlocked level when profile initially loads
   useEffect(() => {
-    if (levelCap > 0) {
-      setSelectedLevel(levelCap)
-    }
-  }, [levelCap])
-
-  const levelToPlay = selectedLevel
-  const { questions, isLoading, error } = useVerbs(levelToPlay)
+    if (levelCap <= 0) return
+    const timeoutId = window.setTimeout(() => {
+      setSelectedLevel(effectiveLevelCap)
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [effectiveLevelCap, levelCap])
+  const { questions, isLoading, error } = useVerbs(levelToPlay, settings.verbsPerLevel)
   const lessonVerbs = useMemo(
     () => Array.from(new Set(questions.map((q) => q.infinitive))).sort((a, b) => a.localeCompare(b)),
     [questions]
@@ -57,14 +62,21 @@ function GameBoard() {
       return () => clearTimeout(timer)
     } else if (countdown === 0) {
       startLevelTimer()
-      setCountdown(null)
+      const timeoutId = window.setTimeout(() => {
+        setCountdown(null)
+      }, 0)
+      return () => window.clearTimeout(timeoutId)
     }
   }, [countdown, startLevelTimer])
 
   useEffect(() => {
     const previousStatus = prevStatusRef.current
     if (previousStatus !== 'IDLE' && session.status === 'IDLE') {
-      setLobbyView('menu')
+      const timeoutId = window.setTimeout(() => {
+        setLobbyView('menu')
+      }, 0)
+      prevStatusRef.current = session.status
+      return () => window.clearTimeout(timeoutId)
     }
     prevStatusRef.current = session.status
   }, [session.status])
@@ -74,7 +86,7 @@ function GameBoard() {
   }
 
   const handleStartQuest = () => {
-    startGame(selectedLevel, questions, true)
+    startGame(levelToPlay, questions, true, { timeLimitSeconds: settings.timeLimitSeconds })
     setCountdown(3)
   }
 
@@ -104,9 +116,10 @@ function GameBoard() {
     ? (gameplay.submissionStatus === 'downgraded' || gameplay.submissionStatus === 'rejected')
     : gameplay.errorsInLevel >= 100
   const isPerfectRun = hasServerSubmission ? isServerPerfect : gameplay.errorsInLevel === 0
+  const isLastPlayableLevel = totalLevels > 0 ? session.level >= totalLevels : false
   const unlockedByThisRun = hasServerSubmission
     ? (gameplay.submissionStatus === 'unlocked' && gameplay.submissionNewLevel === session.level + 1)
-    : session.level >= levelCap
+    : session.level >= effectiveLevelCap
 
   return (
     <div className="relative h-[100dvh] w-full font-sans text-slate-100 overflow-hidden flex flex-col">
@@ -225,9 +238,9 @@ function GameBoard() {
 
                       <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full px-2 sm:px-3">
                           {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
-                            const isLocked = lvl > levelCap
-                            const isHighestUnlocked = lvl === levelCap
-                            const isSelected = lvl === selectedLevel
+                            const isLocked = lvl > effectiveLevelCap
+                            const isHighestUnlocked = lvl === effectiveLevelCap
+                            const isSelected = lvl === levelToPlay
 
                             return (
                               <button
@@ -407,7 +420,7 @@ function GameBoard() {
 
           {session.status === 'FINISHED' && (
             <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-700 w-full">
-              {isPerfectRun && session.level === 18 ? (
+              {isPerfectRun && isLastPlayableLevel ? (
                 <div className="flex flex-col items-center animate-bounce">
                   <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-emerald-400 to-yellow-300 drop-shadow-[0_0_15px_rgba(252,211,77,0.8)]">
                     {t('quest.incredible')}
@@ -422,7 +435,7 @@ function GameBoard() {
 
               <div className="bg-slate-800/80 p-4 md:p-6 rounded-2xl border border-slate-700 shadow-xl text-center space-y-2 max-w-lg w-full">
                 {isPerfectRun ? (
-                  session.level === 18 ? (
+                  isLastPlayableLevel ? (
                     <p className="text-xl md:text-2xl text-yellow-300 font-bold">{t('quest.perfect_master')}</p>
                   ) : unlockedByThisRun ? (
                     <p className="text-lg md:text-xl text-emerald-300 font-semibold drop-shadow-sm">{t('quest.perfect_unlocked')}</p>
@@ -455,7 +468,7 @@ function GameBoard() {
                   ) : (
                     <>
                       <ul className="space-y-2">
-                        {gameplay.topScores.slice(0, 3).map((score: any, idx: number) => {
+                        {gameplay.topScores.slice(0, 3).map((score, idx: number) => {
                           const minutes = Math.floor(score.duration_seconds / 60)
                           const seconds = score.duration_seconds % 60
                           const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`
@@ -501,7 +514,7 @@ function GameBoard() {
                           : null;
 
                         const top3Scores = gameplay.topScores.slice(0, 3);
-                        const isRunInTop3 = top3Scores.some((s: any) => new Date().getTime() - new Date(s.completed_at).getTime() < 10000);
+                        const isRunInTop3 = top3Scores.some((s) => new Date().getTime() - new Date(s.completed_at).getTime() < 10000);
 
                         if (!isRunInTop3 && currentDuration !== null) {
                           const mins = Math.floor(currentDuration / 60);

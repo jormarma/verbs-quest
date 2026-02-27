@@ -4,6 +4,12 @@ import { submitLevelAttempt } from '../utils/sync'
 export type GameStatus = "IDLE" | "PLAYING" | "PAUSED" | "FINISHED"
 export type SubmissionStatus = "unlocked" | "maintained" | "downgraded" | "rejected" | null
 
+export interface TopScoreEntry {
+    duration_seconds: number
+    completed_at: string
+    is_perfect_run: boolean
+}
+
 export interface VerbQuestion {
     verbId: string
     infinitive: string
@@ -11,6 +17,7 @@ export interface VerbQuestion {
     pastParticiple: string
     tense: "PAST_SIMPLE" | "PAST_PARTICIPLE"
     target: string
+    acceptedAnswers: string[]
 }
 
 export interface AnswerStamp {
@@ -40,13 +47,18 @@ export interface GameState {
         errorsInLevel: number
         feedbackState: "NONE" | "CORRECT" | "INCORRECT"
         feedbackTarget: string | null
-        topScores: any[]
+        topScores: TopScoreEntry[]
         submissionStatus: SubmissionStatus
         submissionNewLevel: number | null
     }
 
     // Actions
-    startGame: (level: number, questions: VerbQuestion[], delayTimer?: boolean) => void
+    startGame: (
+        level: number,
+        questions: VerbQuestion[],
+        delayTimer?: boolean,
+        options?: { timeLimitSeconds?: number }
+    ) => void
     startLevelTimer: () => void
     submitAnswer: (answer: string) => void
     advanceQuestion: () => void
@@ -56,7 +68,7 @@ export interface GameState {
     resetGame: () => void
     forceTimeout: () => void
     cancelGame: () => void
-    setTopScores: (scores: any[]) => void
+    setTopScores: (scores: TopScoreEntry[]) => void
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -84,31 +96,38 @@ export const useGameStore = create<GameState>((set, get) => ({
         submissionNewLevel: null
     },
 
-    startGame: (level, questions, delayTimer = false) => set({
-        session: {
-            level,
-            status: "PLAYING",
-            startTime: delayTimer ? null : Date.now(),
-            endTime: null,
-            config: {
-                timeLimit: 180, // 3 mins per level (5 verbs)
-                baseQuestionCount: questions.length
+    startGame: (level, questions, delayTimer = false, options) => {
+        const candidateTimeLimit = options?.timeLimitSeconds
+        const resolvedTimeLimit = typeof candidateTimeLimit === 'number' && Number.isFinite(candidateTimeLimit)
+            ? Math.max(1, Math.floor(candidateTimeLimit))
+            : 180
+
+        return set({
+            session: {
+                level,
+                status: "PLAYING",
+                startTime: delayTimer ? null : Date.now(),
+                endTime: null,
+                config: {
+                    timeLimit: resolvedTimeLimit,
+                    baseQuestionCount: questions.length
+                }
+            },
+            gameplay: {
+                currentQuestionIndex: 0,
+                mainQueue: questions,
+                retryQueue: [],
+                history: [],
+                currentInput: "",
+                errorsInLevel: 0,
+                feedbackState: "NONE",
+                feedbackTarget: null,
+                topScores: [],
+                submissionStatus: null,
+                submissionNewLevel: null
             }
-        },
-        gameplay: {
-            currentQuestionIndex: 0,
-            mainQueue: questions,
-            retryQueue: [],
-            history: [],
-            currentInput: "",
-            errorsInLevel: 0,
-            feedbackState: "NONE",
-            feedbackTarget: null,
-            topScores: [],
-            submissionStatus: null,
-            submissionNewLevel: null
-        }
-    }),
+        })
+    },
 
     startLevelTimer: () => set((state) => ({
         session: { ...state.session, startTime: Date.now() }
@@ -128,7 +147,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (!currentQ) return state // Sanity fallback
 
-        const isCorrect = answer.trim().toLowerCase() === currentQ.target.toLowerCase()
+        const normalizedAnswer = answer.trim().toLowerCase()
+        const isCorrect = currentQ.acceptedAnswers.includes(normalizedAnswer)
 
         // Log the interaction
         const newHistory = [...state.gameplay.history, {

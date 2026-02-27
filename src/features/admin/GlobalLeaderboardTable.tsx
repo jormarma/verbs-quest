@@ -84,7 +84,7 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
     })
   }, [overviewData, sortConfig])
 
-  const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
+  const renderSortIcon = (columnKey: SortKey) => {
     if (sortConfig.key !== columnKey) return null
     return sortConfig.direction === 'asc' ? (
       <ChevronUp className="w-3.5 h-3.5 shrink-0 ml-[2px]" />
@@ -130,7 +130,7 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
                 >
                   <div className="flex items-center gap-1">
                     <span>{t('leaderboard.name')}</span>
-                    <SortIcon columnKey="name" />
+                    {renderSortIcon('name')}
                   </div>
                 </th>
                 <th
@@ -139,7 +139,7 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span className="text-right inline-block">{t('leaderboard.level')}</span>
-                    <SortIcon columnKey="level" />
+                    {renderSortIcon('level')}
                   </div>
                 </th>
                 <th
@@ -148,7 +148,7 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
                 >
                   <div className="flex items-center justify-end gap-1">
                     <Check className="w-4 h-4 inline-block" />
-                    <SortIcon columnKey="perfect_runs" />
+                    {renderSortIcon('perfect_runs')}
                   </div>
                 </th>
                 <th
@@ -157,7 +157,7 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
                 >
                   <div className="flex items-center justify-end gap-1">
                     <span className="text-right inline-block">{t('leaderboard.total')}</span>
-                    <SortIcon columnKey="total_runs" />
+                    {renderSortIcon('total_runs')}
                   </div>
                 </th>
               </tr>
@@ -168,7 +168,7 @@ export function GlobalLeaderboardTable({ onSelectUser, mode = 'admin', compact =
                 return (
                   <tr
                     key={user.user_id}
-                    onClick={isClickable ? () => onSelectUser(user) : undefined}
+                    onClick={onSelectUser ? () => onSelectUser(user) : undefined}
                     className={`transition-colors group text-sm md:text-base ${isClickable ? 'hover:bg-slate-700/30 cursor-pointer' : ''}`}
                   >
                     <td className="py-3 px-1 md:px-2 text-right">

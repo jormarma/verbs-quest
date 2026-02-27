@@ -1,73 +1,95 @@
-# React + TypeScript + Vite
+# Verbs Quest
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Run
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm install
+pnpm dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Build
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm build
 ```
+
+## Full verification
+
+```bash
+pnpm verify
+```
+
+Runs lint + build + local DB smoke checks.
+
+## Import verbs from CSV
+
+The verb source file is [`verbs.csv`](./verbs.csv) with header:
+
+```csv
+category,present,past,participle
+```
+
+Commands:
+
+```bash
+# dry run (no DB writes)
+pnpm verbs:import:dry
+
+# execute import
+pnpm verbs:import
+```
+
+Import behavior:
+
+- `present` -> `verbs.infinitive`
+- `past` -> `verbs.past_simple`
+- `participle` -> `verbs.past_participle`
+- `category` is stored in `verbs.category`
+- category `1` is initially active; categories `2` and `3` are inactive until selected by admin
+
+## Admin verbs list categories
+
+In Admin -> `Verbs` tab, admin selects one active list:
+
+- `1` basic
+- `2` complete
+- `3` extremely complete
+
+When applying a category:
+
+- active verbs are switched atomically
+- app setting `active_verb_category` is updated
+- user level caps are clamped to the new maximum level for that category
+
+## Multi-answer verb forms
+
+For answers containing `/` (for example `burnt/burned`):
+
+- any listed variant is accepted as correct
+- wrong-answer feedback shows all accepted variants separated by ` / `
+
+## Manual verification checklist
+
+1. Import CSV with `pnpm verbs:import`.
+2. Login as admin and open `Verbs` tab.
+3. Switch category to `2`, apply, refresh, and verify category persists.
+4. Switch category to `3`, apply, and verify more levels are available to players.
+5. Start a run with a verb that has alternative forms (e.g. `burn`), verify both alternatives are accepted.
+6. Submit a wrong answer and verify all valid alternatives are shown in feedback.
+
+## Automated smoke check (local DB)
+
+```bash
+pnpm verbs:verify:smoke
+```
+
+This validates:
+
+- all 3 categories exist with data
+- only one category is active at a time
+- admin can update app settings while non-admin updates are blocked
+- app settings range constraints are enforced
+- admin can switch active category
+- switching from larger to smaller category clamps user level caps
+- student cannot switch active category
+- invalid level attempts above active category max are rejected

@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "verify": "pnpm lint && pnpm build && pnpm verbs:verify:smoke",
+    "preview": "vite preview",
+    "verbs:import:dry": "node scripts/import-verbs-csv.mjs",
+    "verbs:import": "node scripts/import-verbs-csv.mjs --execute",
+    "verbs:verify:smoke": "node scripts/verify-admin-verbs-smoke.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

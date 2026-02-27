@@ -46,6 +46,11 @@ export function useAdminStats() {
     const [isLoadingLevelRuns, setIsLoadingLevelRuns] = useState(false)
     const [levelRunsError, setLevelRunsError] = useState<string | null>(null)
 
+    const getErrorMessage = (error: unknown) => {
+        if (error instanceof Error) return error.message
+        return String(error)
+    }
+
     const fetchOverview = useCallback(async () => {
         setIsLoadingOverview(true)
         setOverviewError(null)
@@ -53,9 +58,9 @@ export function useAdminStats() {
             const { data, error } = await supabase.rpc('get_admin_users_overview')
             if (error) throw error
             setOverviewData(data || [])
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to fetch admin overview:", err)
-            setOverviewError(err.message)
+            setOverviewError(getErrorMessage(err))
         } finally {
             setIsLoadingOverview(false)
         }
@@ -70,9 +75,9 @@ export function useAdminStats() {
             })
             if (error) throw error
             setDetailsData(data || [])
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to fetch user details:", err)
-            setDetailsError(err.message)
+            setDetailsError(getErrorMessage(err))
         } finally {
             setIsLoadingDetails(false)
         }
@@ -89,9 +94,9 @@ export function useAdminStats() {
             if (error) throw error
             setLevelRunsData(data?.runs || [])
             setLevelVerbs(data?.verbs || [])
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to fetch user level runs:", err)
-            setLevelRunsError(err.message)
+            setLevelRunsError(getErrorMessage(err))
         } finally {
             setIsLoadingLevelRuns(false)
         }

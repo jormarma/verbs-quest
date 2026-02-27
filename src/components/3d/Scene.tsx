@@ -3,15 +3,26 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { Environment } from '@react-three/drei'
 import * as THREE from 'three'
 
+function createSeededRandom(seed: number) {
+    let state = seed >>> 0
+    return () => {
+        state += 0x6D2B79F5
+        let t = Math.imul(state ^ (state >>> 15), 1 | state)
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t)
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+}
+
 function FlyingStars({ count = 1000, speed = 5, size = 0.1, color = "#cbd5e1" }) {
     const pointsRef = useRef<THREE.Points>(null)
 
     const positions = useMemo(() => {
         const pos = new Float32Array(count * 3)
+        const random = createSeededRandom(count * 2654435761)
         for (let i = 0; i < count; i++) {
-            pos[i * 3] = (Math.random() - 0.5) * 40
-            pos[i * 3 + 1] = (Math.random() - 0.5) * 40
-            pos[i * 3 + 2] = (Math.random() - 0.5) * 40
+            pos[i * 3] = (random() - 0.5) * 40
+            pos[i * 3 + 1] = (random() - 0.5) * 40
+            pos[i * 3 + 2] = (random() - 0.5) * 40
         }
         return pos
     }, [count])
