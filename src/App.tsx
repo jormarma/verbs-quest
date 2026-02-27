@@ -19,6 +19,7 @@ import { GlobalLeaderboardTable } from './features/admin/GlobalLeaderboardTable'
 // i18n
 import { useTranslation } from './lib/hooks/useTranslation'
 import { LanguageSwitcher } from './components/ui/LanguageSwitcher'
+import { UpdateBanner } from './components/ui/UpdateBanner'
 
 function GameBoard() {
   const { session, gameplay, startGame, startLevelTimer, cancelGame } = useGameStore()
@@ -140,6 +141,9 @@ function GameBoard() {
     <div className="relative h-[100dvh] w-full font-sans text-slate-100 overflow-hidden flex flex-col">
       {/* Global 3D Background layer (-z-10) */}
       <Scene />
+
+      {/* PWA Update Banner (z-50, fixed position) */}
+      <UpdateBanner />
 
       {/* UI Foreground Layer (z-10) */}
       <main

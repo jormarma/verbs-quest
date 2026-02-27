@@ -141,7 +141,9 @@ export const en: TranslationDict = {
     "keyboard.right_answer": "Right answer:",
     "keyboard.next_question": "NEXT QUESTION",
     "keyboard.enter": "ENTER",
-    "keyboard.submit_answer": "SUBMIT"
+    "keyboard.submit_answer": "SUBMIT",
+    "update.available": "New version available",
+    "update.action": "Update Now"
 }
 
 export const es: TranslationDict = {
@@ -281,7 +283,9 @@ export const es: TranslationDict = {
     "keyboard.right_answer": "Respuesta correcta:",
     "keyboard.next_question": "SIGUIENTE PREGUNTA",
     "keyboard.enter": "INTRO",
-    "keyboard.submit_answer": "ENVIAR"
+    "keyboard.submit_answer": "ENVIAR",
+    "update.available": "Nueva versión disponible",
+    "update.action": "Actualizar Ahora"
 }
 
 export const verbTranslationsEs: Record<string, string> = {
