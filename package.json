@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "clean": "rm -rf dist docs",
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:prod": "tsc -b && vite build --mode production",
     "lint": "eslint .",
     "verify": "pnpm lint && pnpm build && pnpm verbs:verify:smoke",
     "preview": "vite preview",

@@ -7,10 +7,30 @@ pnpm install
 pnpm dev
 ```
 
-## Build
+## Build and Deployment
 
+### Local Development
+To run the application locally connecting to a local database (e.g., Supabase local):
 ```bash
-pnpm build
+pnpm dev
+```
+This uses the environment variables defined in `.env.development.local`.
+
+### Production Build (GitHub Pages)
+The application is configured to be deployed using GitHub Pages directly from the `main` branch. 
+
+1. Create a `.env.production.local` file (using the provided `.env.production.local` template) and fill in your cloud Supabase credentials.
+2. Run the production build command:
+```bash
+pnpm build:prod
+```
+3. This command uses the production environment variables and generates the production-ready assets into the `docs/` folder (instead of the default `dist/` folder).
+4. Commit the generated `docs/` folder to your repository.
+5. In your GitHub repository settings, navigate to **Pages**, set the source to deploy from a branch, select your `main` branch, and choose the `/docs` folder.
+
+To easily clean up generated build folders, you can use:
+```bash
+pnpm clean
 ```
 
 ## Full verification
