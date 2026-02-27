@@ -77,12 +77,15 @@ export async function syncOfflineQueue() {
         console.log(`Syncing ${queue.length} offline attempts...`)
 
         const remainingQueue: LevelAttemptPayload[] = []
+        let syncedCount = 0
 
         for (const attempt of queue) {
             const result = await submitLevelAttempt(attempt)
             if (result.queued) {
                 // Still failing (maybe went offline again during sync)
                 remainingQueue.push(attempt)
+            } else if (result.success) {
+                syncedCount++
             }
         }
 
@@ -90,6 +93,13 @@ export async function syncOfflineQueue() {
             localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remainingQueue))
         } else {
             localStorage.removeItem(OFFLINE_QUEUE_KEY)
+        }
+
+        // Notify user if any attempts successfully synced
+        if (syncedCount > 0) {
+            alert(`Successfully synced ${syncedCount} offline level attempt${syncedCount > 1 ? 's' : ''} to the server!`)
+            // Ideally we could also dispatch an event here to trigger a leaderboard refresh
+            window.dispatchEvent(new Event('offline-sync-complete'))
         }
 
     } catch (e) {

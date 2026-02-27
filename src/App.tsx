@@ -54,6 +54,21 @@ function GameBoard() {
   const isPlayLobby = session.status === 'IDLE' && lobbyView === 'play'
   const isViewportLockedLobby = isLeaderboardLobby || isPlayLobby
 
+  const [isOffline, setIsOffline] = useState(!navigator.onLine)
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
   useEffect(() => {
     if (countdown === null) return
 
@@ -143,12 +158,20 @@ function GameBoard() {
         )}>
           {/* Logo centered at the top */}
           <div className="flex flex-col items-center w-full">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-400" strokeWidth={2.5} />
-              <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
-                {t('app.title')}
-              </h1>
-              <Swords className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-emerald-400" strokeWidth={2.5} />
+            <div className="flex flex-col items-center gap-1 sm:gap-2">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-400" strokeWidth={2.5} />
+                <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-sm">
+                  {t('app.title')}
+                </h1>
+                <Swords className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-emerald-400" strokeWidth={2.5} />
+              </div>
+              {isOffline && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-amber-900/40 border border-amber-500/50 rounded-full text-amber-300 text-xs sm:text-sm font-bold tracking-wider uppercase animate-pulse shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  Offline Mode
+                </div>
+              )}
             </div>
           </div>
 
@@ -206,24 +229,24 @@ function GameBoard() {
                 <div className="flex-1 min-h-0 flex items-center justify-center animate-in fade-in slide-in-from-bottom-8 duration-700 w-full">
                   <div className="w-full max-w-md px-4 flex flex-col items-center">
                     <div className="w-full flex flex-col gap-5 items-center">
-                    <Button
-                      size="lg"
-                      variant="default"
-                      className="w-full max-w-[280px] h-16 text-lg font-bold flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 hover:shadow-emerald-500/50"
-                      onClick={() => setLobbyView('leaderboard')}
-                    >
-                      <Trophy className="w-5 h-5" />
-                      {t('home.leaderboard')}
-                    </Button>
-                    <Button
-                      size="lg"
-                      variant="default"
-                      className="w-full max-w-[280px] h-16 text-lg font-bold flex items-center justify-center gap-2"
-                      onClick={() => setLobbyView('play')}
-                    >
-                      <Play className="w-5 h-5" />
-                      {t('home.play')}
-                    </Button>
+                      <Button
+                        size="lg"
+                        variant="default"
+                        className="w-full max-w-[280px] h-16 text-lg font-bold flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 hover:shadow-emerald-500/50"
+                        onClick={() => setLobbyView('leaderboard')}
+                      >
+                        <Trophy className="w-5 h-5" />
+                        {t('home.leaderboard')}
+                      </Button>
+                      <Button
+                        size="lg"
+                        variant="default"
+                        className="w-full max-w-[280px] h-16 text-lg font-bold flex items-center justify-center gap-2"
+                        onClick={() => setLobbyView('play')}
+                      >
+                        <Play className="w-5 h-5" />
+                        {t('home.play')}
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -236,7 +259,7 @@ function GameBoard() {
                       <div className="text-center space-y-2 sm:space-y-4 w-full">
                         <h2 className="text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-lg text-white bg-gradient-to-br from-blue-300 to-emerald-300 bg-clip-text text-transparent mb-2 sm:mb-6">{t('quest.levels')}</h2>
 
-                      <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full px-2 sm:px-3">
+                        <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-3 md:gap-4 w-full px-2 sm:px-3">
                           {Array.from({ length: totalLevels }, (_, i) => i + 1).map((lvl) => {
                             const isLocked = lvl > effectiveLevelCap
                             const isHighestUnlocked = lvl === effectiveLevelCap

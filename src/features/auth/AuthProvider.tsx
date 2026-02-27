@@ -48,6 +48,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 resetAuthForm()
             }
             setLoading(false)
+        }).catch(() => {
+            // Offline fallback: try to recover a cached session from localStorage
+            // Supabase stores its session under a key like sb-<project-ref>-auth-token
+            console.warn('Failed to get session (likely offline). Attempting localStorage recovery.')
+            try {
+                const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+                if (storageKey) {
+                    const raw = localStorage.getItem(storageKey)
+                    if (raw) {
+                        const parsed = JSON.parse(raw)
+                        const cachedSession = parsed // Supabase stores the session object directly
+                        if (cachedSession?.access_token && cachedSession?.user) {
+                            setSession(cachedSession)
+                            setUser(cachedSession.user)
+                            setLoading(false)
+                            return
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to recover cached session:', e)
+            }
+            // No cached session found — show login screen
+            resetAuthForm()
+            setLoading(false)
         })
 
         // 2. Listen for auth changes
