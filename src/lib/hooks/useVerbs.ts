@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../supabase/client'
+import { useTable } from 'spacetimedb/react'
+import { tables } from '../../lib/spacetime/module_bindings'
+import type { Verb } from '../../lib/spacetime/module_bindings/types'
 import type { VerbQuestion } from '../stores/useGameStore'
 
 const VERBS_CACHE_KEY_PREFIX = 'verbs_quest_verbs_cache_level_'
@@ -81,7 +83,17 @@ function buildQuestionsFromVerbs(verbs: CachedVerb[], verbsPerLevel: number): Ve
     return generatedQuestions
 }
 
+function toCached(verbs: Verb[]): CachedVerb[] {
+    return verbs.map((v) => ({
+        id: String(v.id),
+        infinitive: v.infinitive,
+        past_simple: v.pastSimple,
+        past_participle: v.pastParticiple,
+    }))
+}
+
 export function useVerbs(level: number, verbsPerLevel: number) {
+    const [allVerbs] = useTable(tables.verb)
     const [questions, setQuestions] = useState<VerbQuestion[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -89,27 +101,23 @@ export function useVerbs(level: number, verbsPerLevel: number) {
     useEffect(() => {
         let isMounted = true
 
-        const fetchVerbs = async () => {
+        const fetchVerbs = () => {
             setIsLoading(true)
             setError(null)
 
             try {
-                // Fetch active verbs for the requested level
-                const { data, error: fetchError } = await supabase
-                    .from('verbs')
-                    .select('id, infinitive, past_simple, past_participle')
-                    .eq('level_group', level)
-                    .eq('active', true)
+                const matching = allVerbs.filter((v) => v.levelGroup === level && v.active)
 
-                if (fetchError) throw fetchError
-
-                if (data && isMounted) {
+                if (isMounted) {
                     // Cache verbs for offline use
                     try {
-                        localStorage.setItem(VERBS_CACHE_KEY_PREFIX + level, JSON.stringify(data))
+                        localStorage.setItem(
+                            VERBS_CACHE_KEY_PREFIX + level,
+                            JSON.stringify(toCached(matching)),
+                        )
                     } catch { /* quota exceeded — ignore */ }
 
-                    setQuestions(buildQuestionsFromVerbs(data, verbsPerLevel))
+                    setQuestions(buildQuestionsFromVerbs(toCached(matching), verbsPerLevel))
                 }
             } catch (err) {
                 if (isMounted) {
@@ -140,8 +148,7 @@ export function useVerbs(level: number, verbsPerLevel: number) {
         return () => {
             isMounted = false
         }
-    }, [level, verbsPerLevel])
+    }, [level, verbsPerLevel, allVerbs])
 
     return { questions, isLoading, error }
 }
-

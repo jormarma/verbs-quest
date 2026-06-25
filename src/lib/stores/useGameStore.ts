@@ -201,7 +201,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                         gameplay: {
                             ...current.gameplay,
                             topScores: res.topScores || [],
-                            submissionStatus: res.data?.status ?? null,
+                            submissionStatus: (res.data?.status as SubmissionStatus) ?? null,
                             submissionNewLevel: typeof res.data?.new_level === 'number' ? res.data.new_level : null
                         }
                     }))

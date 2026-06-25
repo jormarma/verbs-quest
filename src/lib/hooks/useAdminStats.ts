@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
-import { supabase } from '../supabase/client'
+import { Identity } from 'spacetimedb'
+import type { UserOverview, UserLevelDetail, LevelRunsResponse, LevelRunDetail, LevelVerbDetail } from '../spacetime/module_bindings/types'
+import { getConnection } from '../spacetime/client'
 
 export interface AdminUserOverview {
     user_id: string
@@ -51,51 +53,84 @@ export function useAdminStats() {
         return String(error)
     }
 
-    const fetchOverview = useCallback(async () => {
+const fetchOverview = useCallback(async () => {
         setIsLoadingOverview(true)
         setOverviewError(null)
         try {
-            const { data, error } = await supabase.rpc('get_admin_users_overview')
-            if (error) throw error
-            setOverviewData(data || [])
+            const conn = getConnection()
+            const rows = (await conn.procedures.getUsersOverview({})) as UserOverview[]
+            setOverviewData(
+                rows.map((r) => ({
+                    user_id: r.userIdentity,
+                    username: r.username,
+                    current_level_cap: r.currentLevelCap,
+                    total_runs: Number(r.totalRuns),
+                    total_perfect_runs: Number(r.totalPerfectRuns),
+                })),
+            )
         } catch (err: unknown) {
-            console.error("Failed to fetch admin overview:", err)
+            console.error('Failed to fetch admin overview:', err)
             setOverviewError(getErrorMessage(err))
         } finally {
             setIsLoadingOverview(false)
         }
     }, [])
 
-    const fetchUserDetails = useCallback(async (userId: string) => {
+const fetchUserDetails = useCallback(async (userId: string) => {
         setIsLoadingDetails(true)
         setDetailsError(null)
         try {
-            const { data, error } = await supabase.rpc('get_admin_user_details', {
-                p_user_id: userId
-            })
-            if (error) throw error
-            setDetailsData(data || [])
+            const conn = getConnection()
+            let identity: Identity
+            try {
+                identity = Identity.fromString(userId)
+            } catch {
+                throw new Error(`Invalid user id: ${userId}`)
+            }
+            const rows = (await conn.procedures.getUserLevelDetails({ target: identity })) as UserLevelDetail[]
+            setDetailsData(
+                rows.map((r) => ({
+                    level_attempted: r.levelAttempted,
+                    total_runs: Number(r.totalRuns),
+                    perfect_runs: Number(r.perfectRuns),
+                    best_time_seconds: r.bestTimeSeconds ?? null,
+                    global_rank: r.globalRank ? Number(r.globalRank) : null,
+                })),
+            )
         } catch (err: unknown) {
-            console.error("Failed to fetch user details:", err)
+            console.error('Failed to fetch user details:', err)
             setDetailsError(getErrorMessage(err))
         } finally {
             setIsLoadingDetails(false)
         }
     }, [])
 
-    const fetchUserLevelRuns = useCallback(async (userId: string, level: number) => {
+const fetchUserLevelRuns = useCallback(async (userId: string, level: number) => {
         setIsLoadingLevelRuns(true)
         setLevelRunsError(null)
         try {
-            const { data, error } = await supabase.rpc('get_admin_user_level_runs', {
-                p_user_id: userId,
-                p_level: level
-            })
-            if (error) throw error
-            setLevelRunsData(data?.runs || [])
-            setLevelVerbs(data?.verbs || [])
+            const conn = getConnection()
+            const identity = Identity.fromString(userId)
+            const resp = (await conn.procedures.getUserLevelRuns({ target: identity, level })) as LevelRunsResponse
+            setLevelRunsData(
+                resp.runs.map((r: LevelRunDetail) => ({
+                    duration_seconds: r.durationSeconds,
+                    is_perfect_run: r.isPerfectRun,
+                    completed_at: r.completedAt.toISOString(),
+                    errors_count: r.errorsCount,
+                    client_timestamp_start: r.clientTimestampStart.toISOString(),
+                })),
+            )
+            setLevelVerbs(
+                resp.verbs.map((v: LevelVerbDetail) => ({
+                    id: String(v.id),
+                    infinitive: v.infinitive,
+                    past_simple: v.pastSimple,
+                    past_participle: v.pastParticiple,
+                })),
+            )
         } catch (err: unknown) {
-            console.error("Failed to fetch user level runs:", err)
+            console.error('Failed to fetch user level runs:', err)
             setLevelRunsError(getErrorMessage(err))
         } finally {
             setIsLoadingLevelRuns(false)
@@ -115,6 +150,6 @@ export function useAdminStats() {
         levelVerbs,
         isLoadingLevelRuns,
         levelRunsError,
-        fetchUserLevelRuns
+        fetchUserLevelRuns,
     }
 }

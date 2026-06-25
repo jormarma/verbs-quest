@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Save, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { supabase } from '../../lib/supabase/client'
+import { useTable } from 'spacetimedb/react'
+import { tables } from '../../lib/spacetime/module_bindings'
+import { getConnection } from '../../lib/spacetime/client'
 import { Button } from '../../components/ui/Button'
 import { useTranslation } from '../../lib/hooks/useTranslation'
 
@@ -20,7 +22,8 @@ const DEFAULT_SETTINGS: SettingsSnapshot = {
 }
 
 export function AdminSettingsPanel() {
-    const { t, language } = useTranslation()
+    const { t } = useTranslation()
+    const [settingsRows] = useTable(tables.app_setting)
     const [timeLimitInput, setTimeLimitInput] = useState<string>(String(DEFAULT_SETTINGS.timeLimitSeconds))
     const [verbsPerLevelInput, setVerbsPerLevelInput] = useState<string>(String(DEFAULT_SETTINGS.verbsPerLevel))
     const [initialSettings, setInitialSettings] = useState<SettingsSnapshot>(DEFAULT_SETTINGS)
@@ -31,53 +34,17 @@ export function AdminSettingsPanel() {
     const [isSuccessFading, setIsSuccessFading] = useState(false)
 
     useEffect(() => {
-        let isMounted = true
-
-        const fetchSettings = async () => {
-            setIsLoading(true)
-            setErrorMessage(null)
-
-            try {
-                const { data, error } = await supabase
-                    .from('app_settings')
-                    .select('time_limit_seconds, verbs_per_level')
-                    .eq('id', 1)
-                    .single()
-
-                if (error) throw error
-
-                const snapshot: SettingsSnapshot = {
-                    timeLimitSeconds: data.time_limit_seconds,
-                    verbsPerLevel: data.verbs_per_level
-                }
-
-                if (isMounted) {
-                    setInitialSettings(snapshot)
-                    setTimeLimitInput(String(snapshot.timeLimitSeconds))
-                    setVerbsPerLevelInput(String(snapshot.verbsPerLevel))
-                }
-            } catch (err) {
-                if (isMounted) {
-                    const message = err instanceof Error
-                        ? err.message
-                        : language === 'es'
-                            ? 'No se pudo cargar la configuración.'
-                            : 'Failed to load settings.'
-                    setErrorMessage(message)
-                }
-            } finally {
-                if (isMounted) {
-                    setIsLoading(false)
-                }
-            }
+        const row = settingsRows.find((r) => r.id === 1)
+        if (!row) return
+        const snapshot: SettingsSnapshot = {
+            timeLimitSeconds: row.timeLimitSeconds,
+            verbsPerLevel: row.verbsPerLevel,
         }
-
-        fetchSettings()
-
-        return () => {
-            isMounted = false
-        }
-    }, [language])
+        setInitialSettings(snapshot)
+        setTimeLimitInput(String(snapshot.timeLimitSeconds))
+        setVerbsPerLevelInput(String(snapshot.verbsPerLevel))
+        setIsLoading(false)
+    }, [settingsRows])
 
     useEffect(() => {
         if (!successMessage) {
@@ -125,26 +92,14 @@ export function AdminSettingsPanel() {
         setIsSaving(true)
 
         try {
-            const { data, error } = await supabase
-                .from('app_settings')
-                .update({
-                    time_limit_seconds: parsedTimeLimit,
-                    verbs_per_level: parsedVerbsPerLevel
-                })
-                .eq('id', 1)
-                .select('time_limit_seconds, verbs_per_level')
-                .single()
-
-            if (error) throw error
-
-            const nextSnapshot: SettingsSnapshot = {
-                timeLimitSeconds: data.time_limit_seconds,
-                verbsPerLevel: data.verbs_per_level
-            }
-
-            setInitialSettings(nextSnapshot)
-            setTimeLimitInput(String(nextSnapshot.timeLimitSeconds))
-            setVerbsPerLevelInput(String(nextSnapshot.verbsPerLevel))
+            const conn = getConnection()
+            await conn.reducers.updateAppSettings({
+                timeLimitSeconds: parsedTimeLimit,
+                verbsPerLevel: parsedVerbsPerLevel,
+            })
+            setInitialSettings({ timeLimitSeconds: parsedTimeLimit, verbsPerLevel: parsedVerbsPerLevel })
+            setTimeLimitInput(String(parsedTimeLimit))
+            setVerbsPerLevelInput(String(parsedVerbsPerLevel))
             setSuccessMessage(t('admin.settings.saved_successfully'))
         } catch (err) {
             const message = err instanceof Error ? err.message : t('admin.settings.save_error')

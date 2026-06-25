@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, AlertCircle, ListChecks } from 'lucide-react'
-import { supabase } from '../../lib/supabase/client'
+import { useTable } from 'spacetimedb/react'
+import { tables } from '../../lib/spacetime/module_bindings'
+import { getConnection } from '../../lib/spacetime/client'
 import { Button } from '../../components/ui/Button'
 import { useTranslation } from '../../lib/hooks/useTranslation'
 
@@ -30,7 +32,7 @@ const CATEGORY_META: Array<{ value: VerbCategory; labelKey: string; descriptionK
     }
 ]
 
-function normalizeCategory(value: unknown): VerbCategory {
+function normalizeCategory(value: number | undefined): VerbCategory {
     return value === 2 || value === 3 ? value : 1
 }
 
@@ -43,7 +45,10 @@ function emptyStatsMap(): Record<VerbCategory, CategoryStats> {
 }
 
 export function AdminVerbsPanel() {
-    const { t, language } = useTranslation()
+    const { t } = useTranslation()
+    const [settingsRows] = useTable(tables.app_setting)
+    const [verbs] = useTable(tables.verb)
+
     const [selectedCategory, setSelectedCategory] = useState<VerbCategory>(1)
     const [initialCategory, setInitialCategory] = useState<VerbCategory>(1)
     const [statsByCategory, setStatsByCategory] = useState<Record<VerbCategory, CategoryStats>>(emptyStatsMap)
@@ -54,69 +59,35 @@ export function AdminVerbsPanel() {
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [isSuccessFading, setIsSuccessFading] = useState(false)
 
-    const hasChanges = selectedCategory !== initialCategory
-
-    const loadPanelData = useCallback(async () => {
-        setIsLoading(true)
-        setErrorMessage(null)
-
-        try {
-            const [settingsResult, verbsResult] = await Promise.all([
-                supabase
-                    .from('app_settings')
-                    .select('active_verb_category')
-                    .eq('id', 1)
-                    .single(),
-                supabase
-                    .from('verbs')
-                    .select('category, level_group, active')
-            ])
-
-            if (settingsResult.error) throw settingsResult.error
-            if (verbsResult.error) throw verbsResult.error
-
-            const nextInitialCategory = normalizeCategory(settingsResult.data.active_verb_category)
-
-            const nextStats = emptyStatsMap()
-            const levelsByCategory: Record<VerbCategory, Set<number>> = {
-                1: new Set<number>(),
-                2: new Set<number>(),
-                3: new Set<number>()
-            }
-
-            for (const row of verbsResult.data ?? []) {
-                const category = normalizeCategory(row.category)
-                nextStats[category].totalVerbs += 1
-                levelsByCategory[category].add(row.level_group)
-
-                if (row.active) {
-                    nextStats[category].activeVerbs += 1
-                }
-            }
-
-            nextStats[1].totalLevels = levelsByCategory[1].size
-            nextStats[2].totalLevels = levelsByCategory[2].size
-            nextStats[3].totalLevels = levelsByCategory[3].size
-
-            setInitialCategory(nextInitialCategory)
-            setSelectedCategory(nextInitialCategory)
-            setStatsByCategory(nextStats)
-        } catch (err) {
-            const message = err instanceof Error
-                ? err.message
-                : language === 'es'
-                    ? 'No se pudieron cargar las categorías de verbos.'
-                    : 'Failed to load verb categories.'
-            setErrorMessage(message)
-            setStatsByCategory(emptyStatsMap())
-        } finally {
-            setIsLoading(false)
+    const recompute = useCallback(() => {
+        const row = settingsRows.find((r) => r.id === 1)
+        const nextInitialCategory = normalizeCategory(row?.activeVerbCategory)
+        const nextStats = emptyStatsMap()
+        const levelsByCategory: Record<VerbCategory, Set<number>> = {
+            1: new Set<number>(),
+            2: new Set<number>(),
+            3: new Set<number>()
         }
-    }, [language])
+        for (const v of verbs) {
+            const category = normalizeCategory(v.category)
+            nextStats[category].totalVerbs += 1
+            levelsByCategory[category].add(v.levelGroup)
+            if (v.active) {
+                nextStats[category].activeVerbs += 1
+            }
+        }
+        nextStats[1].totalLevels = levelsByCategory[1].size
+        nextStats[2].totalLevels = levelsByCategory[2].size
+        nextStats[3].totalLevels = levelsByCategory[3].size
+        setInitialCategory(nextInitialCategory)
+        setSelectedCategory(nextInitialCategory)
+        setStatsByCategory(nextStats)
+        setIsLoading(false)
+    }, [settingsRows, verbs])
 
     useEffect(() => {
-        loadPanelData()
-    }, [loadPanelData])
+        recompute()
+    }, [recompute])
 
     useEffect(() => {
         if (!successMessage) {
@@ -141,6 +112,8 @@ export function AdminVerbsPanel() {
         }
     }, [successMessage])
 
+    const hasChanges = selectedCategory !== initialCategory
+
     const handleApplyCategory = async () => {
         if (!hasChanges) return
 
@@ -150,21 +123,26 @@ export function AdminVerbsPanel() {
         setIsSaving(true)
 
         try {
-            const { data, error } = await supabase.rpc('set_active_verb_category', {
-                p_category: selectedCategory
-            })
-
-            if (error) throw error
-
-            const usersClamped = typeof data?.users_clamped === 'number' ? data.users_clamped : 0
-
-            setInitialCategory(selectedCategory)
+            const conn = getConnection()
+            // Capture the user row count before the switch so we can detect
+            // clamping. The reducer doesn't return a count directly, but the
+            // user table subscription will reflect any clamped caps.
+            const beforeUsers = [...conn.db.user.iter()]
+            await conn.reducers.setActiveVerbCategory({ category: selectedCategory })
+            // After the call, the subscription updates synchronously; recompute
+            // stats from the new state.
+            const afterUsers = [...conn.db.user.iter()]
+            const clamped = beforeUsers.reduce((acc, prev) => {
+                const now = afterUsers.find((u) => u.identity.toHexString() === prev.identity.toHexString())
+                if (now && now.currentLevelCap < prev.currentLevelCap) return acc + 1
+                return acc
+            }, 0)
             setSuccessMessage(
-                usersClamped > 0
-                    ? t('admin.verbs.saved_successfully_clamped', { count: usersClamped })
-                    : t('admin.verbs.saved_successfully')
+                clamped > 0
+                    ? t('admin.verbs.saved_successfully_clamped', { count: clamped })
+                    : t('admin.verbs.saved_successfully'),
             )
-            await loadPanelData()
+            recompute()
         } catch (err) {
             const message = err instanceof Error ? err.message : t('admin.verbs.save_error')
             setErrorMessage(message)

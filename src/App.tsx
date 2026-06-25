@@ -23,7 +23,7 @@ import { UpdateBanner } from './components/ui/UpdateBanner'
 
 function GameBoard() {
   const { session, gameplay, startGame, startLevelTimer, cancelGame } = useGameStore()
-  const { user, signOut } = useAuth()
+  const { username, signOut } = useAuth()
   const { t, tVerb } = useTranslation()
 
   const { levelCap, role, isLoadingProfile } = useProfile()
@@ -185,10 +185,10 @@ function GameBoard() {
           <div className="flex justify-between items-center w-full h-10 px-1 sm:px-2">
             {/* Left Side: Username Always Visible */}
             <div className="flex items-center gap-4">
-              {user && (
+              {username && (
                 <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2 bg-slate-800/50 border border-slate-600 rounded-md px-3 py-1.5 shadow-lg backdrop-blur-md text-slate-200">
                   <span className="font-bold text-sm md:text-base tracking-wide truncate max-w-[150px] sm:max-w-[250px]">
-                    @{user.user_metadata?.full_name || t('player.name')}
+                    @{username}
                   </span>
                 </div>
               )}
@@ -204,7 +204,7 @@ function GameBoard() {
                 <>
                   <LanguageSwitcher />
 
-                  {user && (
+                  {username && (
                     <Button
                       variant="outline"
                       size="icon"
@@ -394,7 +394,7 @@ function GameBoard() {
                 <div className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-md bg-blue-900/40 text-blue-300 border border-blue-700/50 text-xs sm:text-sm font-bold uppercase tracking-widest shadow-inner">
                   {t(`tense.${currentQ.tense}`)}
                 </div>
-                {/* Prompting the player with the infinitive loaded directly from Supabase */}
+                {/* Prompting the player with the infinitive loaded directly from SpacetimeDB */}
                 <h2 className="text-4xl sm:text-5xl md:text-7xl font-black text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] tracking-tight uppercase">
                   {currentQ.infinitive}
                 </h2>

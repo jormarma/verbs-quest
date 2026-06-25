@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+//
+// Import verbs from verbs.csv into the SpacetimeDB `verbs-quest` database.
+// Uses the `spacetime call` CLI under the hood; the caller must already be
+// registered as an admin (see README → "Bootstrap an admin").
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -7,13 +11,15 @@ import { spawnSync } from 'node:child_process'
 
 const CWD = process.cwd()
 const DEFAULT_CSV = path.join(CWD, 'verbs.csv')
-const DEFAULT_DB_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+const DEFAULT_DB = 'verbs-quest'
+const DEFAULT_SERVER = 'local'
 const DEFAULT_CHUNK_SIZE = 5
 
 function parseArgs(argv) {
   const args = {
     csvPath: DEFAULT_CSV,
-    dbUrl: process.env.DATABASE_URL || DEFAULT_DB_URL,
+    db: process.env.SPACETIMEDB_DB ?? DEFAULT_DB,
+    server: process.env.SPACETIMEDB_SERVER ?? DEFAULT_SERVER,
     chunkSize: DEFAULT_CHUNK_SIZE,
     execute: false,
   }
@@ -28,8 +34,12 @@ function parseArgs(argv) {
       args.csvPath = path.resolve(CWD, argv[++i] ?? '')
       continue
     }
-    if (token === '--db-url') {
-      args.dbUrl = argv[++i] ?? ''
+    if (token === '--db') {
+      args.db = argv[++i] ?? ''
+      continue
+    }
+    if (token === '--server') {
+      args.server = argv[++i] ?? ''
       continue
     }
     if (token === '--chunk-size') {
@@ -53,17 +63,18 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(
     [
-      'Import verbs from verbs.csv into public.verbs.',
+      'Import verbs from verbs.csv into the SpacetimeDB verbs-quest module.',
       '',
       'Usage:',
-      '  node scripts/import-verbs-csv.mjs [--csv <path>] [--chunk-size <n>] [--db-url <url>] [--execute]',
+      '  node scripts/import-verbs-csv.mjs [--csv <path>] [--chunk-size <n>] [--db <name>] [--server <local|maincloud>] [--execute]',
       '',
       'Options:',
-      '  --csv <path>         CSV path (default: ./verbs.csv)',
-      '  --chunk-size <n>     Verbs per level group inside each category (default: 5)',
-      '  --db-url <url>       Postgres URL (default: $DATABASE_URL or local Supabase)',
-      '  --execute            Execute SQL against DB. Without this flag, script runs as dry-run.',
-    ].join('\n')
+      '  --csv <path>           CSV path (default: ./verbs.csv)',
+      '  --chunk-size <n>       Verbs per level group inside each category (default: 5)',
+      '  --db <name>            SpacetimeDB database name (default: verbs-quest)',
+      '  --server <name>        SpacetimeDB server nickname (default: local)',
+      '  --execute              Apply changes. Without this flag, runs as dry-run.',
+    ].join('\n'),
   )
 }
 
@@ -102,10 +113,6 @@ function normalizeWord(value) {
   return value.trim().toLowerCase()
 }
 
-function escapeSql(value) {
-  return value.replace(/'/g, "''")
-}
-
 function loadCsvRows(csvPath) {
   if (!fs.existsSync(csvPath)) {
     throw new Error(`CSV file not found: ${csvPath}`)
@@ -123,7 +130,10 @@ function loadCsvRows(csvPath) {
 
   const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase())
   const expected = ['category', 'present', 'past', 'participle']
-  if (header.length !== expected.length || header.some((value, index) => value !== expected[index])) {
+  if (
+    header.length !== expected.length ||
+    header.some((value, index) => value !== expected[index])
+  ) {
     throw new Error(`Invalid CSV header. Expected: ${expected.join(',')}`)
   }
 
@@ -175,38 +185,13 @@ function buildVerbRecords(rows, chunkSize) {
       pastSimple: row.pastSimple,
       pastParticiple: row.pastParticiple,
       levelGroup: Math.floor((nextIndex - 1) / chunkSize) + 1,
-      // Keep current gameplay stable until category-selection rollout is complete.
+      // Keep gameplay stable until admin picks category 2/3.
       active: row.category === 1,
     }
   })
 }
 
-function buildSql(records) {
-  const valuesSql = records
-    .map((record) => {
-      const cells = [
-        `'${escapeSql(record.infinitive)}'`,
-        `'${escapeSql(record.pastSimple)}'`,
-        `'${escapeSql(record.pastParticiple)}'`,
-        `${record.levelGroup}`,
-        record.active ? 'true' : 'false',
-        `${record.category}`,
-      ]
-      return `(${cells.join(', ')})`
-    })
-    .join(',\n')
-
-  return `
-BEGIN;
-TRUNCATE TABLE public.verbs;
-INSERT INTO public.verbs (infinitive, past_simple, past_participle, level_group, active, category)
-VALUES
-${valuesSql};
-COMMIT;
-`.trim()
-}
-
-function printSummary(records, chunkSize) {
+function printSummary(records) {
   const byCategory = new Map([
     [1, { count: 0, maxLevel: 0, activeCount: 0 }],
     [2, { count: 0, maxLevel: 0, activeCount: 0 }],
@@ -223,33 +208,66 @@ function printSummary(records, chunkSize) {
 
   console.log('Import summary')
   console.log(`- total rows: ${records.length}`)
-  console.log(`- level chunk size: ${chunkSize}`)
   for (const category of [1, 2, 3]) {
     const summary = byCategory.get(category)
     if (!summary) continue
     console.log(
-      `- category ${category}: ${summary.count} verbs, ${summary.maxLevel} levels, ${summary.activeCount} active`
+      `- category ${category}: ${summary.count} verbs, ${summary.maxLevel} levels, ${summary.activeCount} active`,
     )
   }
 }
 
-function runSql(dbUrl, sql) {
-  const result = spawnSync(
-    'psql',
-    [dbUrl, '-v', 'ON_ERROR_STOP=1', '-f', '-'],
-    {
-      input: sql,
-      stdio: ['pipe', 'inherit', 'inherit'],
-      encoding: 'utf8',
-    }
-  )
+/**
+ * Encode a value as JSON for use as a positional CLI arg to `spacetime call`.
+ * spawnSync passes args directly to execvp — no shell quoting needed.
+ */
+function jsonArg(value) {
+  return JSON.stringify(value)
+}
 
-  if (result.error) {
-    throw result.error
+function callUpsertVerb(server, db, record) {
+  return spawnSync(
+    'spacetime',
+    [
+      'call',
+      '--server', server,
+      db,
+      'upsert_verb',
+      jsonArg(record.infinitive),
+      jsonArg(record.pastSimple),
+      jsonArg(record.pastParticiple),
+      jsonArg(record.levelGroup),
+      jsonArg(record.category),
+      jsonArg(record.active),
+    ],
+    { encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'] },
+  )
+}
+
+function callTruncateVerbs(server, db) {
+  return spawnSync(
+    'spacetime',
+    ['call', '--server', server, db, 'truncate_verbs'],
+    { encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'] },
+  )
+}
+
+function applyImport(server, db, records) {
+  // Clear the existing verbs first so the import is deterministic.
+  const truncate = callTruncateVerbs(server, db)
+  if (truncate.status !== 0) {
+    process.stderr.write(truncate.stderr ?? '')
+    throw new Error(`truncate_verbs failed (status=${truncate.status})`)
   }
 
-  if (result.status !== 0) {
-    throw new Error(`psql exited with status ${result.status}`)
+  for (const record of records) {
+    const result = callUpsertVerb(server, db, record)
+    if (result.status !== 0) {
+      process.stderr.write(result.stderr ?? '')
+      throw new Error(
+        `upsert_verb failed for "${record.infinitive}" (status=${result.status})`,
+      )
+    }
   }
 }
 
@@ -258,15 +276,16 @@ function main() {
   const rows = loadCsvRows(args.csvPath)
   const records = buildVerbRecords(rows, args.chunkSize)
 
-  printSummary(records, args.chunkSize)
+  printSummary(records)
 
   if (!args.execute) {
-    console.log('\nDry-run complete. Re-run with --execute to apply changes.')
+    console.log(
+      `\nDry-run complete. Re-run with --execute to apply changes (target: ${args.server}/${args.db}).`,
+    )
     return
   }
 
-  const sql = buildSql(records)
-  runSql(args.dbUrl, sql)
+  applyImport(args.server, args.db, records)
   console.log('\nImport applied successfully.')
 }
 

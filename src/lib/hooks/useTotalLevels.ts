@@ -1,45 +1,20 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../supabase/client'
+import { useMemo } from 'react'
+import { useTable } from 'spacetimedb/react'
+import { tables } from '../../lib/spacetime/module_bindings'
 
 export function useTotalLevels() {
-    const [totalLevels, setTotalLevels] = useState<number>(0)
-    const [isLoadingTotalLevels, setIsLoadingTotalLevels] = useState(true)
+    const [verbs] = useTable(tables.verb)
 
-    useEffect(() => {
-        let isMounted = true
-
-        const fetchTotalLevels = async () => {
-            setIsLoadingTotalLevels(true)
-            try {
-                // Fetch the highest level_group from the verbs table
-                const { data, error } = await supabase
-                    .from('verbs')
-                    .select('level_group')
-                    .eq('active', true)
-                    .order('level_group', { ascending: false })
-                    .limit(1)
-
-                if (isMounted) {
-                    if (data && data.length > 0 && !error) {
-                        setTotalLevels(data[0].level_group)
-                    } else {
-                        setTotalLevels(18) // Graceful fallback
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to fetch total levels", err)
-                if (isMounted) setTotalLevels(18) // fallback
-            } finally {
-                if (isMounted) setIsLoadingTotalLevels(false)
-            }
+    const totalLevels = useMemo(() => {
+        let max = 0
+        for (const v of verbs) {
+            if (v.active && v.levelGroup > max) max = v.levelGroup
         }
+        return max
+    }, [verbs])
 
-        fetchTotalLevels()
-
-        return () => {
-            isMounted = false
-        }
-    }, [])
-
-    return { totalLevels, isLoadingTotalLevels }
+    return {
+        totalLevels: totalLevels > 0 ? totalLevels : 18, // fallback when no active verbs yet
+        isLoadingTotalLevels: false,
+    }
 }

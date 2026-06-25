@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
-import { supabase } from '../../lib/supabase/client'
+import { useTable } from 'spacetimedb/react'
+import { tables } from '../../lib/spacetime/module_bindings'
+import type { User } from '../../lib/spacetime/module_bindings/types'
+import { getConnection, connect, clearStoredToken } from '../../lib/spacetime/client'
 import { Button } from '../../components/ui/Button'
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher'
 import { AuthContext } from './AuthContext'
@@ -11,11 +13,12 @@ import { useTranslation } from '../../lib/hooks/useTranslation'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const { t } = useTranslation()
-    const [session, setSession] = useState<Session | null>(null)
+    const [identityHex, setIdentityHex] = useState<string | null>(null)
+    const [isConnected, setIsConnected] = useState(false)
+    const [hasProfile, setHasProfile] = useState<boolean | null>(null)
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
 
-    // Auth UI State
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [repeatPassword, setRepeatPassword] = useState('')
@@ -31,67 +34,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return String(error)
     }
 
-    const resetAuthForm = () => {
+    const resetAuthForm = useCallback(() => {
         setUsername('')
         setPassword('')
         setRepeatPassword('')
         setAuthError('')
         setIsRegistering(false)
-    }
-
-    useEffect(() => {
-        // 1. Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session)
-            setUser(session?.user ?? null)
-            if (!session) {
-                resetAuthForm()
-            }
-            setLoading(false)
-        }).catch(() => {
-            // Offline fallback: try to recover a cached session from localStorage
-            // Supabase stores its session under a key like sb-<project-ref>-auth-token
-            console.warn('Failed to get session (likely offline). Attempting localStorage recovery.')
-            try {
-                const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
-                if (storageKey) {
-                    const raw = localStorage.getItem(storageKey)
-                    if (raw) {
-                        const parsed = JSON.parse(raw)
-                        const cachedSession = parsed // Supabase stores the session object directly
-                        if (cachedSession?.access_token && cachedSession?.user) {
-                            setSession(cachedSession)
-                            setUser(cachedSession.user)
-                            setLoading(false)
-                            return
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to recover cached session:', e)
-            }
-            // No cached session found — show login screen
-            resetAuthForm()
-            setLoading(false)
-        })
-
-        // 2. Listen for auth changes
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session)
-            setUser(session?.user ?? null)
-            if (!session) {
-                resetAuthForm()
-            }
-            setLoading(false)
-        })
-
-        return () => subscription.unsubscribe()
     }, [])
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Connection lifecycle
+    // ──────────────────────────────────────────────────────────────────────
+
     useEffect(() => {
-        if (loading || session) return
+        let cancelled = false
+        connect()
+            .then(({ identityHex }) => {
+                if (cancelled) return
+                setIdentityHex(identityHex)
+                setIsConnected(true)
+            })
+            .catch((err) => {
+                console.error('[auth] failed to connect to SpacetimeDB:', err)
+                if (!cancelled) {
+                    setIsConnected(false)
+                    setLoading(false)
+                }
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Profile subscription — derive auth state from the user table for
+    // the connected identity.
+    // ──────────────────────────────────────────────────────────────────────
+
+    const [userRows] = useTable(tables.user)
+
+    useEffect(() => {
+        if (!isConnected || !identityHex) return
+        const me = userRows.find((u) => u.identity.toHexString() === identityHex)
+        if (me) {
+            setUser(me)
+            setHasProfile(true)
+        } else {
+            setUser(null)
+            setHasProfile(false)
+        }
+        setLoading(false)
+    }, [isConnected, identityHex, userRows])
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Auth form: register / sign in
+    // ──────────────────────────────────────────────────────────────────────
+
+    useEffect(() => {
+        if (loading || hasProfile) return
 
         const clearNativeInputs = () => {
             if (usernameInputRef.current) usernameInputRef.current.value = ''
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearNativeInputs()
         const timeoutId = window.setTimeout(clearNativeInputs, 0)
         return () => window.clearTimeout(timeoutId)
-    }, [loading, session, isRegistering])
+    }, [loading, hasProfile, isRegistering])
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -112,7 +112,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAuthError(t('auth.error.username_chars'))
             return
         }
-
+        if (username.length < 3 || username.length > 12) {
+            setAuthError(t('auth.error.username_chars'))
+            return
+        }
+        if (password.length < 6) {
+            setAuthError(t('auth.error.password_short'))
+            return
+        }
         if (isRegistering && password !== repeatPassword) {
             setAuthError(t('auth.error.password_mismatch'))
             return
@@ -120,52 +127,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setIsLoadingAuth(true)
 
-        // Supabase strictly requires email or phone. 
-        // We simulate "username" auth by appending a dummy domain under the hood. 
-        // Using a .com domain is required to pass Supabase's internal regex validator.
-        // We preserve underscores to guarantee that identical alphanumeric strings with different underscores are unique.
-        const simulatedEmail = `${username.toLowerCase().trim().replace(/[^a-z0-9_]/g, '')}@verbsquest.com`
-
         try {
-            if (isRegistering) {
-                const { error } = await supabase.auth.signUp({
-                    email: simulatedEmail,
-                    password,
-                    options: {
-                        data: {
-                            full_name: username.trim()
-                        }
-                    }
-                })
-                if (error) throw error
-            } else {
-                const { error } = await supabase.auth.signInWithPassword({
-                    email: simulatedEmail,
-                    password,
-                })
-                if (error) throw error
-            }
-
-            // Clear the form fields upon successful completion
+            const conn = getConnection()
+            // For "sign-in" semantics we'd need cross-device login (not in MVP),
+            // so a returning user re-registers as a fresh identity here. The
+            // password is still stored so future cross-device support can be
+            // added without a schema change.
+            await conn.reducers.registerUser({
+                username: username.trim(),
+                password,
+            })
             setUsername('')
             setPassword('')
             setRepeatPassword('')
             setAuthError('')
         } catch (error: unknown) {
-            let msg = getErrorMessage(error)
-            // Aggressively sanitize the error message so the illusion is maintained
-            msg = msg.replace(simulatedEmail, `"${username}"`)
-            msg = msg.replace(/email/gi, 'username')
-            setAuthError(msg)
+            setAuthError(getErrorMessage(error))
         } finally {
             setIsLoadingAuth(false)
         }
     }
 
     const signOut = async () => {
-        // Ensure returning to login is always a fresh start
+        // "Sign out" locally: clear the stored token + drop the profile.
+        // The SDK connection itself stays open but will lose the user row on
+        // next reconnect. Reload to fully reset state.
         resetAuthForm()
-        await supabase.auth.signOut()
+        clearStoredToken()
+        try {
+            getConnection().disconnect()
+        } catch {
+            // ignore
+        }
+        window.location.reload()
     }
 
     if (loading) {
@@ -176,13 +170,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
     }
 
-    // Render Auth Gates if no session exists natively
-    if (!session) {
+    if (!isConnected) {
+        return (
+            <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+                <div className="text-center max-w-md p-6">
+                    <h2 className="text-2xl font-black text-rose-400 mb-2">
+                        Cannot reach the database
+                    </h2>
+                    <p className="text-slate-300">
+                        Make sure SpacetimeDB is running locally
+                        (<code className="font-mono text-emerald-300">spacetime start</code>).
+                    </p>
+                </div>
+            </div>
+        )
+    }
+
+    if (hasProfile === false) {
         return (
             <div className="relative min-h-screen w-full overflow-hidden text-slate-100">
                 <Scene />
                 <div className="relative z-10 flex min-h-screen flex-col p-4 md:p-8">
-                    {/* Header matching the app */}
                     <header className="flex flex-col w-full max-w-5xl mx-auto gap-2 sm:gap-4 mb-2 sm:mb-4">
                         <div className="flex flex-col items-center w-full">
                             <div className="flex items-center gap-3 sm:gap-4">
@@ -298,9 +306,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
     }
 
-    // Authenticated: Provide contexts and render Children
     return (
-        <AuthContext.Provider value={{ session, user, signOut }}>
+        <AuthContext.Provider
+            value={{
+                identityHex,
+                username: user?.username ?? null,
+                role: (user?.role as 'student' | 'admin') ?? null,
+                isAuthenticated: hasProfile === true,
+                isLoading: false,
+                signOut,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     )

@@ -2,104 +2,140 @@
 
 ## 1. Technology Stack Selection
 
-### Frontend Core: **Vite + React (TypeScript)**
-* **Justification:** While Next.js is powerful, "Verbs Quest" is a high-interactivity application heavily reliant on client-side state and Three.js render loops.
-    * **PWA Suitability:** Vite produces a static Single Page Application (SPA) bundle, which is significantly easier to cache reliably via Service Workers (Workbox) for offline play than Next.js's server-hybrid routes.
-    * **Performance:** Eliminates the overhead of server-side hydration for game components, ensuring the highest possible frame rate for the Three.js canvas.
+### Frontend Core: **Vite + React 19 (TypeScript)**
+- High-interactivity SPA, easy to cache via Workbox for offline play.
+- PWA-ready: service worker + offline verbs cache + offline attempt queue.
 
 ### State Management: **Zustand**
-* **Justification:**
-    * **Performance:** Zustand supports "transient updates" (updating state without re-rendering the component tree). This is critical for connecting Game Logic to the Three.js visual layer (React Three Fiber) without causing performance drops during animations.
-    * **Simplicity:** Minimal boilerplate compared to Redux Toolkit, making the "Retry Queue" logic easier to implement and debug.
+- Transient updates: connect game logic to the R3F canvas without re-renders.
+- Minimal boilerplate for the retry-queue loop.
 
 ### Visual Layer: **React Three Fiber (R3F)**
-* **Strategy:** A global `Canvas` component will sit at `z-index: 0` (background). The UI (Tailwind) will sit at `z-index: 10` (foreground).
-* **Implementation:** Even in the MVP, the Canvas is initialized. In early stages, it will render a simple static background. In the Polish phase, it will render interactive 3D assets triggered by Zustand state changes.
+- Canvas at `z-index: 0` (background), Tailwind UI at `z-index: 10`.
+
+### Backend: **SpacetimeDB 2.6 (Rust module)**
+- Single source of truth: tables, reducers, and procedures are colocated in
+  the WASM-compiled Rust crate at `spacetimedb/`.
+- Subscriptions let the client react to server-side state changes without
+  polling.
+- TypeScript bindings are generated from the module (`src/lib/spacetime/module_bindings/`)
+  so the client and server share the same schema.
 
 ---
 
-## 2. Database Schema (Supabase PostgreSQL)
+## 2. Database Schema (SpacetimeDB Rust)
 
-### A. Tables & Relationships
+### A. Tables
 
-**1. `public.users`**
-* **Purpose:** Local mirror of the `auth.users` identity + Role management.
-* **Columns:**
-    * `id` (uuid, PK): Matches `auth.users.id` strictly via FK.
-    * `role` (text): 'student' (default), 'admin', 'teacher'.
-    * `username` (text): Synced from Auth metadata or generated automatically.
-    * `created_at` (timestamp).
-    * `current_level_cap` (int): Highest level unlocked (Default: 1).
+**1. `user` (public)**
+- Mirrors `auth.users` from the old Supabase schema — plus role management.
+- `identity: Identity` (PK) — the SpacetimeDB connection identity, auto-
+  generated per device and persisted in localStorage as a signed JWT.
+- `username_lower: String` (unique) — case-folded for unique lookups.
+- `username: String` — display name.
+- `password_hash: String` — argon2 PHC string (kept for future cross-device
+  login; not currently validated server-side since each device has its own
+  identity).
+- `role: String` — `"student"` (default) or `"admin"`.
+- `current_level_cap: u32` — highest unlocked level.
+- `created_at: Timestamp`.
 
-**2. `public.verbs`**
-* **Purpose:** The curriculum content.
-* **Columns:**
-    * `id` (uuid, PK).
-    * `infinitive` (text).
-    * `past_simple` (text).
-    * `past_participle` (text).
-    * `level_group` (int): The level this verb belongs to (1-N).
-    * `active` (bool): Soft delete flag.
+**2. `verb` (public)**
+- `id: u64` (PK, auto-inc).
+- `infinitive`, `past_simple`, `past_participle: String`.
+- `level_group: u32` — which level the verb belongs to.
+- `category: u32` — 1 (basic), 2 (complete), 3 (extremely complete).
+- `active: bool` — only one category is active at a time.
 
-**3. `public.game_sessions`**
-* **Purpose:** Historical record of runs for analytics.
-* **Columns:**
-    * `id` (uuid, PK).
-    * `user_id` (text, FK -> users.id).
-    * `level_attempted` (int).
-    * `errors_count` (int).
-    * `duration_seconds` (int).
-    * `completed_at` (timestamp).
-    * `is_perfect_run` (bool): Computed (errors == 0 && time within limit).
-    * `client_timestamp_start` (timestamp): For anti-cheat validation.
-    * `client_timestamp_end` (timestamp): For anti-cheat validation.
+**3. `game_session` (public)**
+- `id: u64` (PK, auto-inc).
+- `user_identity: Identity` (indexed).
+- `level_attempted: u32` (indexed).
+- `errors_count`, `duration_seconds: u32`.
+- `is_perfect_run: bool`.
+- `client_timestamp_start`, `client_timestamp_end`, `completed_at: Timestamp`.
 
-### B. Database Triggers for Profile Sync
-Since Supabase Auth operates in its own secluded schema (`auth`), we use Postgres Triggers to automatically generate and maintain a public profile in `public.users` whenever a user signs up.
+**4. `app_setting` (public, singleton)**
+- `id: u8 = 1` (PK).
+- `time_limit_seconds: u32` (60..=300).
+- `verbs_per_level: u32` (5..=25).
+- `active_verb_category: u32` (1..=3).
+- `updated_at: Timestamp`, `updated_by: Identity`.
 
-1. **Trigger:** `on_auth_user_created`
-2. **Action:** Executes a PL/pgSQL function (`handle_new_user`) that intercepts the new user's UUID from `auth.users` and inserts a default 'student' row into `public.users`.
-3. **Benefits:** Eliminates the need for external webhooks, edge functions, and "self-healing" frontend fallbacks. The profile is guaranteed to exist the moment they authenticate.
+**5. `user_attempt` (public)**
+- `identity: Identity` (PK).
+- `last_status: String` — `"unlocked" | "maintained" | "downgraded"`.
+- `last_new_level: u32`.
+- `last_completed_at: Timestamp`.
+- Written by `submit_level_attempt` so clients can pick up the result via
+  a subscription (SpacetimeDB reducers can't return values directly).
+
+### B. Lifecycle
+
+`init` reducer seeds `app_setting` row 1 with defaults
+(180 s time limit, 5 verbs per level, category 1 active).
 
 ---
 
 ## 3. Security Model
 
-### A. Row-Level Security (RLS) Policies
+### A. Auth
 
-All tables will have RLS enabled.
+There is no separate `auth.users` table — SpacetimeDB identities ARE users.
+The web SDK generates a per-device identity on first connection and signs it
+into a JWT stored in `localStorage`. Subsequent visits reuse the same token
+so the player stays logged in.
 
-| Table | Policy Name | Logic |
-| :--- | :--- | :--- |
-| **users** | `read_own_profile` | `auth.uid() = id` |
-| **users** | `admin_read_all` | `exists(select 1 from users where id = auth.uid() and role = 'admin')` |
-| **verbs** | `public_read` | `true` (Game needs to download all verbs for offline cache) |
-| **verbs** | `admin_write` | `exists(select 1 from users where id = auth.uid() and role = 'admin')` |
-| **game_sessions** | `insert_own` | `auth.uid() = user_id` |
-| **game_sessions** | `read_own` | `auth.uid() = user_id` |
-| **game_sessions** | `admin_read_all` | `exists(select 1 from users where id = auth.uid() and role = 'admin')` |
+Username uniqueness is enforced server-side (case-folded). Passwords are
+hashed with argon2 (`SaltString::from_b64(...)` with salt bytes from
+`ctx.rng()`, since SpacetimeDB disallows `getrandom`).
 
-### B. Anti-Cheat & Offline Sync Strategy
+The very first `register_admin` call is allowed even without an existing
+admin; subsequent admin registrations are rejected (`promote_to_admin` is
+the only path after that).
 
-We cannot trust the client to say "I won." The client sends a **Payload**, and the Database decides if it's a win.
+### B. Authorization
 
-**The "Submit Result" RPC Function (`submit_level_attempt`):**
-1.  **Input:** `level_id`, `start_time`, `end_time`, `error_count`, `question_log`.
-2.  **Validation 1 (Time):** Calculate `duration = end_time - start_time`. Get the number of questions answered.
-    * *Rule:* If `duration < (questions_count * 0.8 seconds)`, reject submission (Physically impossible to type that fast).
-3.  **Validation 2 (Identity):** Ensure `auth.uid()` matches the payload user.
-4.  **Execution:**
-    * Insert record into `game_sessions`.
-    * **IF** `error_count == 0` **AND** `duration <= level_time_limit`:
-        * UPDATE `users SET current_level_cap = current_level_cap + 1`.
-        * Return `{ status: 'unlocked', new_level: X }`.
-    * **ELSE**: Return `{ status: 'locked' }`.
+All admin-only operations check `ctx.sender()` against the user table
+inside the reducer:
+
+```rust
+fn require_admin(ctx: &ReducerContext) -> Result<User, String> { ... }
+```
+
+Reductions with this gate: `update_app_settings`, `set_active_verb_category`,
+`upsert_verb`, `delete_verb`, `truncate_verbs`, `promote_to_admin`.
+
+Public tables (no RLS in SpacetimeDB — subscriptions are gated client-side):
+`user`, `verb`, `game_session`, `app_setting`, `user_attempt`.
+
+Procedures (`get_users_overview`, `get_user_level_details`,
+`get_user_level_runs`) are read-only and can be called by any authenticated
+client.
+
+### C. Anti-Cheat & Submission Validation
+
+**`submit_level_attempt(level_id, start_time_iso, end_time_iso, error_count, questions_count)`**
+
+1. Validates identity (auto via `require_user`).
+2. Validates level is within the active verb list's max level.
+3. Parses ISO-8601 timestamps server-side so the client can stay in
+   `Date` semantics.
+4. Anti-cheat: rejects attempts faster than
+   `questions_count * 0.8` seconds.
+5. Computes `is_perfect = on_time && no_errors`.
+6. Inserts the `game_session` row.
+7. Updates `user.current_level_cap`:
+   - perfect → `max(cap, level+1)` clamped to active max level, status `unlocked`
+   - on time with errors → cap unchanged, status `maintained`
+   - slow → `cap-1` clamped to `[1, max_level]`, status `downgraded`
+8. Writes the result to `user_attempt` so subscribers can read it.
 
 ---
 
 ## 4. Game State Machine (Zustand Store)
 
-This structure manages the active gameplay loop.
+Identical to the original design — see the store file for the full shape:
 
 ```json
 {
@@ -107,47 +143,51 @@ This structure manages the active gameplay loop.
     "level": 5,
     "status": "IDLE", // "PLAYING" | "PAUSED" | "FINISHED"
     "startTime": 1715000000,
-    "config": {
-      "timeLimit": 120,
-      "baseQuestionCount": 10
-    }
+    "config": { "timeLimit": 120, "baseQuestionCount": 10 }
   },
   "gameplay": {
     "currentQuestionIndex": 0,
-    "mainQueue": [
-      { "verbId": "101", "tense": "PAST_SIMPLE", "target": "WENT" },
-      { "verbId": "101", "tense": "PAST_PARTICIPLE", "target": "GONE" }
-    ],
-    "retryQueue": [], // Pushes here on wrong answer
-    "history": [], // Log of all inputs for replay/validation
-    "currentInput": "WE", // Bound to virtual keyboard
-    "errorsInLevel": 0
+    "mainQueue": [ { "verbId": "101", "tense": "PAST_SIMPLE", "target": "WENT" }, ... ],
+    "retryQueue": [],
+    "history": [],
+    "currentInput": "WE",
+    "errorsInLevel": 0,
+    "topScores": [ ... ],
+    "submissionStatus": "unlocked" | "maintained" | "downgraded" | "rejected" | null,
+    "submissionNewLevel": 6
   }
 }
 ```
 
+---
+
 ## 5. Folder Structure
-Scalable "Feature-Sliced" structure for Vite.
 
 ```
+/spacetimedb               # Rust module (server-side)
+  /src/lib.rs              # Tables, reducers, procedures, helpers
+  Cargo.toml
 /src
-  /assets           # Static images/fonts
   /components
-    /ui             # Generic Tailwind UI (Buttons, Cards)
-    /game           # Game-specific UI (VirtualKeyboard, Timer)
-    /3d             # R3F components (Scene, Avatar, Lights)
+    /ui                    # Generic Tailwind UI (Buttons, Cards, etc.)
+    /game                  # Game-specific UI (VirtualKeyboard, Timer)
+    /3d                    # R3F components (Scene, Avatar, Lights)
   /features
-    /auth           # Supabase Auth wrappers, Login UI, ProtectRoute components
-    /dashboard      # Admin charts, tables
-    /game-engine    # The core logic (State machine, Validation)
+    /auth                  # AuthProvider + AuthContext (SpacetimeDB identity)
+    /admin                 # AdminDashboard, AdminSettingsPanel, AdminVerbsPanel,
+                            # GlobalLeaderboardTable
+    /game-engine           # (state machine lives in /lib/stores/useGameStore.ts)
   /lib
-    /supabase       # Client setup
-    /hooks          # Global hooks
-    /stores         # Zustand stores (useGameStore, useUserStore)
-    /utils          # Offline sync helpers, Date formatters
-  /pages            # Route definitions
+    /spacetime             # SpacetimeDB client + auto-generated bindings
+      /module_bindings/    # Generated TypeScript SDK (DO NOT EDIT)
+      client.ts            # Shared DbConnection + token persistence
+    /hooks                 # useProfile, useVerbs, useAppSettings, useAdminStats, ...
+    /stores                # Zustand stores (useGameStore, useSettingsStore)
+    /utils                 # sync (offline queue + submit), cn (classNames)
+  /pages                   # Route definitions (kept for future)
     /admin
     /student
-  /styles           # Tailwind config
-  App.tsx           # Main Router & Layouts
+  App.tsx                  # Main Router & Layouts
+/scripts                   # CSV import + smoke test (CLI-driven)
+/verbs.csv                 # Source of truth for verbs
 ```

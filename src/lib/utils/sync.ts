@@ -1,4 +1,5 @@
-import { supabase } from '../supabase/client'
+import { getConnection } from '../spacetime/client'
+import type { TopScoreEntry } from '../stores/useGameStore'
 
 export interface LevelAttemptPayload {
     levelId: number
@@ -10,7 +11,20 @@ export interface LevelAttemptPayload {
 
 const OFFLINE_QUEUE_KEY = 'verbs_quest_offline_queue'
 
-export async function submitLevelAttempt(payload: LevelAttemptPayload) {
+export interface SubmitAttemptResult {
+    success: boolean
+    rejected?: boolean
+    queued?: boolean
+    reason?: string
+    error?: string
+    data?: {
+        status: string
+        new_level: number
+    }
+    topScores?: TopScoreEntry[]
+}
+
+export async function submitLevelAttempt(payload: LevelAttemptPayload): Promise<SubmitAttemptResult> {
     if (!navigator.onLine) {
         console.warn('Device is offline. Queuing attempt for later sync.')
         queueAttemptLocally(payload)
@@ -18,37 +32,97 @@ export async function submitLevelAttempt(payload: LevelAttemptPayload) {
     }
 
     try {
-        const { data, error } = await supabase.rpc('submit_level_attempt', {
-            p_level_id: payload.levelId,
-            p_start_time: payload.startTime,
-            p_end_time: payload.endTime,
-            p_error_count: payload.errorCount,
-            p_questions_count: payload.questionsCount
+        const conn = getConnection()
+
+        // Snapshot the top-5 sessions BEFORE the reducer runs so we know which
+        // ones already existed; the new session will appear once the reducer
+        // commits.
+        const beforeTop = loadTopScores(conn, payload.levelId)
+
+        await conn.reducers.submitLevelAttempt({
+            levelId: payload.levelId,
+            startTimeIso: payload.startTime,
+            endTimeIso: payload.endTime,
+            errorCount: payload.errorCount,
+            questionsCount: payload.questionsCount,
         })
 
-        if (error) {
-            console.error('RPC Error:', error.message)
-            // If it's a network error, we might still want to queue it
-            if (error.message.includes('fetch') || error.message.includes('network')) {
-                queueAttemptLocally(payload)
-                return { success: false, queued: true, error: error.message }
-            }
-            throw error
+        // Read back the user_attempt row (set by the reducer) to get status + new level
+        const attempts = [...conn.db.user_attempt.iter()]
+        const me = attempts.find(
+            (a) => a.identity.toHexString() === conn.identity?.toHexString(),
+        )
+
+        // Top scores — after the call, the new session is in the subscription.
+        const topScores = loadTopScores(conn, payload.levelId)
+        const newTopScores = topScores.length > 0 ? topScores : beforeTop
+
+        return {
+            success: true,
+            queued: false,
+            data: me
+                ? { status: me.lastStatus, new_level: me.lastNewLevel }
+                : { status: 'maintained', new_level: 1 },
+            topScores: newTopScores,
         }
-
-        // Check if the RPC returned a cheat rejection
-        if (data && data.status === 'rejected') {
-            console.error('Anti-Cheat Rejection:', data.reason)
-            return { success: false, rejected: true, reason: data.reason }
-        }
-
-        console.log('Level attempt submitted successfully:', data)
-        return { success: true, queued: false, data, topScores: data.top_scores }
-
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
+        // Anti-cheat rejections come back as SenderError with the reducer's Err string.
+        if (message.toLowerCase().includes('anti-cheat')) {
+            return { success: false, rejected: true, reason: message }
+        }
+        if (message.toLowerCase().includes('network') || message.toLowerCase().includes('fetch')) {
+            queueAttemptLocally(payload)
+            return { success: false, queued: true, error: message }
+        }
         console.error('Failed to submit level attempt:', e)
         return { success: false, error: message }
+    }
+}
+
+/**
+ * Pull the current user's top-5 game sessions for the given level out of the
+ * local subscription cache. Sorted ascending by duration (best time first),
+ * with ties broken by most-recent completion time.
+ */
+function toMicros(ts: { microsSinceUnixEpoch?: bigint | number } | number): number {
+    if (typeof ts === 'number') return ts
+    if (typeof ts.microsSinceUnixEpoch === 'bigint') return Number(ts.microsSinceUnixEpoch)
+    if (typeof ts.microsSinceUnixEpoch === 'number') return ts.microsSinceUnixEpoch
+    return Number(ts)
+}
+function loadTopScores(conn: ReturnType<typeof getConnection>, level: number): TopScoreEntry[] {
+    try {
+        const myIdentity = conn.identity?.toHexString()
+        if (!myIdentity) return []
+
+        const sessions = [...conn.db.game_session.iter()]
+            .filter(
+                (s) =>
+                    s.userIdentity.toHexString() === myIdentity &&
+                    s.levelAttempted === level,
+            )
+            .sort((a, b) => {
+                if (a.durationSeconds !== b.durationSeconds) {
+                    return a.durationSeconds - b.durationSeconds
+                }
+                const aMicros = toMicros(a.completedAt)
+                const bMicros = toMicros(b.completedAt)
+                return Number(bMicros - aMicros)
+            })
+            .slice(0, 5)
+
+        return sessions.map((s) => {
+            const micros = toMicros(s.completedAt)
+            return {
+                duration_seconds: s.durationSeconds,
+                is_perfect_run: s.isPerfectRun,
+                completed_at: new Date(Number(micros) / 1000).toISOString(),
+            }
+        })
+    } catch (e) {
+        console.warn('Failed to load top scores locally:', e)
+        return []
     }
 }
 
@@ -82,7 +156,6 @@ export async function syncOfflineQueue() {
         for (const attempt of queue) {
             const result = await submitLevelAttempt(attempt)
             if (result.queued) {
-                // Still failing (maybe went offline again during sync)
                 remainingQueue.push(attempt)
             } else if (result.success) {
                 syncedCount++
@@ -95,19 +168,15 @@ export async function syncOfflineQueue() {
             localStorage.removeItem(OFFLINE_QUEUE_KEY)
         }
 
-        // Notify user if any attempts successfully synced
         if (syncedCount > 0) {
             alert(`Successfully synced ${syncedCount} offline level attempt${syncedCount > 1 ? 's' : ''} to the server!`)
-            // Ideally we could also dispatch an event here to trigger a leaderboard refresh
             window.dispatchEvent(new Event('offline-sync-complete'))
         }
-
     } catch (e) {
         console.error('Error during offline sync:', e)
     }
 }
 
-// Optional: Set up an event listener to trigger sync when coming back online
 if (typeof window !== 'undefined') {
     window.addEventListener('online', syncOfflineQueue)
 }
