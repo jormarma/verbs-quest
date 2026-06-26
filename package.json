@@ -3,8 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "pnpm@10.8.0",
   "scripts": {
-    "clean": "rm -rf dist docs",
+    "clean": "rm -rf dist",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:prod": "tsc -b && vite build --mode production",

@@ -1,0 +1,4 @@
+# Cloudflare Pages (Git-connected deploys read pages_build_output_dir from here)
+name = "verbs-quest"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-09-23"

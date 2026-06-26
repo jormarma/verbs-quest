@@ -42,22 +42,46 @@ that identity so the player stays logged in.
 If you ever want to log out (or move to a new device), open DevTools → Application
 → Local Storage and delete the `verbs-quest.stdb.token` key.
 
-## Build & deployment
+## Build locally
 
 ```bash
+cp .env.production.example .env.production.local   # first time only
 pnpm build:prod
+pnpm preview                                          # http://localhost:4173
 ```
 
-This runs `tsc -b && vite build --mode production`, generating the
-production bundle under `docs/`. GitHub Pages serves straight from that
-folder.
+Production output is written to `dist/` (not committed to git).
 
-The `.env.production.local` file controls the production SpacetimeDB target
-(see `VITE_SPACETIMEDB_URI` / `VITE_SPACETIMEDB_DB`). To publish to
-Maincloud:
+## Deploy to Cloudflare Pages
+
+Connect the GitHub repo in the Cloudflare dashboard with these settings:
+
+| Setting | Value |
+| --- | --- |
+| Production branch | `main` |
+| Framework preset | None |
+| Build command | `pnpm build:prod` |
+| Build output directory | `dist` |
+| Node version | `20` (or use repo `.node-version`) |
+
+**Environment variables** (Production):
+
+| Variable | Value |
+| --- | --- |
+| `VITE_SPACETIMEDB_URI` | `wss://maincloud.spacetimedb.com` |
+| `VITE_SPACETIMEDB_DB` | `verbs-quest` |
+
+`wrangler.toml` sets `pages_build_output_dir = "dist"` for Wrangler-based
+workflows. SPA routing is handled by `public/_redirects`.
+
+### Backend (SpacetimeDB Maincloud)
+
+Publish the database module and seed verbs before the live site can work:
 
 ```bash
 pnpm stdb:publish:maincloud
+pnpm verbs:import
+spacetime call verbs-quest register_admin '"admin"' '"yourpassword"'
 ```
 
 ## Tests
