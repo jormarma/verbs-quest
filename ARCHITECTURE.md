@@ -94,6 +94,17 @@ The very first `register_admin` call is allowed even without an existing
 admin; subsequent admin registrations are rejected (`promote_to_admin` is
 the only path after that).
 
+**Google sign-in (OIDC).** SpacetimeDB accepts any OpenID Connect compliant
+JWT and derives the `Identity` from the token's `iss` + `sub` claims, so a
+Google account maps to a single stable identity across all devices (no
+password). The client obtains a Google ID token via Google Identity Services
+and passes it through `DbConnection.builder().withToken(idToken)`. The
+`register_google_user(username)` reducer validates the token's issuer
+(`accounts.google.com`) and audience (`GOOGLE_CLIENT_ID`, a public value via
+`ctx.sender_auth().jwt()`) before creating a password-less `user` row. The
+Google client ID is public (no secret in the PWA). Anonymous/device identities
+and username/password login continue to work alongside Google sign-in.
+
 ### B. Authorization
 
 All admin-only operations check `ctx.sender()` against the user table

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Secrets — never commit Google OAuth client secret downloads (not needed by the app)
+client_secret*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

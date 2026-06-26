@@ -3,13 +3,38 @@ import type { ReactNode } from 'react'
 import { useSpacetimeDB, useTable } from 'spacetimedb/react'
 import { tables } from '../../lib/spacetime/module_bindings'
 import type { User } from '../../lib/spacetime/module_bindings/types'
-import { getConnection, clearStoredToken } from '../../lib/spacetime/client'
+import {
+    getConnection,
+    clearStoredToken,
+    beginGoogleSession,
+    getAuthMethod,
+    GOOGLE_CLIENT_ID,
+} from '../../lib/spacetime/client'
+import { renderGoogleButton, googleSignOut } from './googleAuth'
 import { Button } from '../../components/ui/Button'
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher'
 import { AuthContext } from './AuthContext'
 import { Swords, BookOpen } from 'lucide-react'
 import { Scene } from '../../components/3d/Scene'
 import { useTranslation } from '../../lib/hooks/useTranslation'
+
+const GOOGLE_ENABLED = GOOGLE_CLIENT_ID.length > 0
+
+function GoogleSignInButton({
+    onCredential,
+    onError,
+}: {
+    onCredential: (idToken: string) => void
+    onError: () => void
+}) {
+    const ref = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        const el = ref.current
+        if (!el || !GOOGLE_ENABLED) return
+        renderGoogleButton(el, GOOGLE_CLIENT_ID, onCredential).catch(() => onError())
+    }, [onCredential, onError])
+    return <div ref={ref} className="flex justify-center min-h-[44px]" />
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const { t } = useTranslation()
@@ -28,10 +53,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const usernameInputRef = useRef<HTMLInputElement>(null)
     const passwordInputRef = useRef<HTMLInputElement>(null)
     const repeatPasswordInputRef = useRef<HTMLInputElement>(null)
+    const authMethod = getAuthMethod()
 
     const getErrorMessage = (error: unknown) => {
         if (error instanceof Error) return error.message
         return String(error)
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Google sign-in: the GIS button hands us an ID token. We persist it as the
+    // SpacetimeDB connection token and reload — the connection is cached by
+    // (uri, db), so a reload is the reliable way to reconnect with the new
+    // token (mirrors signOut()).
+    // ──────────────────────────────────────────────────────────────────────
+
+    const handleGoogleCredential = useCallback((idToken: string) => {
+        beginGoogleSession(idToken)
+        window.location.reload()
+    }, [])
+
+    const handleGoogleRegister = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setAuthError('')
+
+        if (!/^[a-zA-Z0-9_]+$/.test(username) || username.length < 3 || username.length > 12) {
+            setAuthError(t('auth.error.username_chars'))
+            return
+        }
+
+        setIsLoadingAuth(true)
+        try {
+            await getConnection().reducers.registerGoogleUser({ username: username.trim() })
+            setUsername('')
+        } catch (error: unknown) {
+            setAuthError(getErrorMessage(error))
+        } finally {
+            setIsLoadingAuth(false)
+        }
     }
 
     const resetAuthForm = useCallback(() => {
@@ -133,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // next reconnect. Reload to fully reset state.
         resetAuthForm()
         clearStoredToken()
+        googleSignOut()
         try {
             getConnection().disconnect()
         } catch {
@@ -143,6 +202,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!isConnected) {
         if (connectionError) {
+            // A Google session whose ID token expired fails to reconnect — offer
+            // re-authentication instead of the generic "DB unreachable" message.
+            if (authMethod === 'google' && GOOGLE_ENABLED) {
+                return (
+                    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+                        <div className="text-center max-w-md p-6 space-y-4">
+                            <h2 className="text-2xl font-black text-amber-400">
+                                {t('auth.session_expired_title')}
+                            </h2>
+                            <p className="text-slate-300">{t('auth.session_expired_subtitle')}</p>
+                            <GoogleSignInButton
+                                onCredential={handleGoogleCredential}
+                                onError={() => setAuthError(t('auth.google_failed'))}
+                            />
+                            <button
+                                onClick={signOut}
+                                type="button"
+                                className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors"
+                            >
+                                {t('auth.use_other_account')}
+                            </button>
+                        </div>
+                    </div>
+                )
+            }
             return (
                 <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
                     <div className="text-center max-w-md p-6">
@@ -197,6 +281,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             <div className="flex justify-end mb-3">
                                 <LanguageSwitcher />
                             </div>
+                            {authMethod === 'google' ? (
+                            <div className="space-y-4">
+                                <div className="text-center space-y-1">
+                                    <h2 className="text-xl font-bold text-white">{t('auth.choose_name_title')}</h2>
+                                    <p className="text-sm text-slate-300">{t('auth.choose_name_subtitle')}</p>
+                                </div>
+                                <form onSubmit={handleGoogleRegister} className="space-y-4" autoComplete="off">
+                                    {authError && (
+                                        <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
+                                            {authError}
+                                        </div>
+                                    )}
+                                    <div className="space-y-1 text-left">
+                                        <label className="text-sm font-medium text-slate-300">{t('auth.username')}</label>
+                                        <input
+                                            type="text"
+                                            name="vq_google_username"
+                                            required
+                                            minLength={3}
+                                            maxLength={12}
+                                            pattern="^[a-zA-Z0-9_]+$"
+                                            title={t('auth.username_hint')}
+                                            value={username}
+                                            onChange={(e) => setUsername(e.target.value)}
+                                            placeholder={t('auth.placeholder_username')}
+                                            autoComplete="off"
+                                            autoCapitalize="none"
+                                            spellCheck={false}
+                                            className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div className="flex justify-center pt-2">
+                                        <Button
+                                            type="submit"
+                                            variant="default"
+                                            disabled={isLoadingAuth}
+                                            className="w-fit min-w-[140px] mt-2 h-11 text-base sm:text-lg font-bold"
+                                        >
+                                            {isLoadingAuth ? '...' : t('auth.confirm_name')}
+                                        </Button>
+                                    </div>
+                                </form>
+                                <div className="text-center">
+                                    <button
+                                        onClick={signOut}
+                                        type="button"
+                                        className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors text-sm"
+                                    >
+                                        {t('auth.use_other_account')}
+                                    </button>
+                                </div>
+                            </div>
+                            ) : (
+                            <>
                             <form onSubmit={handleAuth} className="space-y-4" autoComplete="off">
                                 {authError && (
                                     <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
@@ -285,6 +423,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     {isRegistering ? t('auth.signin') : t('auth.signup')}
                                 </button>
                             </div>
+
+                            {GOOGLE_ENABLED && (
+                                <>
+                                    <div className="flex items-center gap-3 my-5">
+                                        <div className="h-px flex-1 bg-slate-700" />
+                                        <span className="text-xs uppercase tracking-wide text-slate-400">{t('auth.or')}</span>
+                                        <div className="h-px flex-1 bg-slate-700" />
+                                    </div>
+                                    <GoogleSignInButton
+                                        onCredential={handleGoogleCredential}
+                                        onError={() => setAuthError(t('auth.google_failed'))}
+                                    />
+                                </>
+                            )}
+                            </>
+                            )}
                         </div>
                     </div>
                 </div>

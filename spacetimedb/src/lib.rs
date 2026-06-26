@@ -13,8 +13,8 @@ use argon2::{
 };
 use rand::RngCore;
 use spacetimedb::{
-    procedure, reducer, table, Identity, ProcedureContext, ReducerContext, SpacetimeType, Table,
-    Timestamp,
+    procedure, reducer, table, Identity, JwtClaims, ProcedureContext, ReducerContext,
+    SpacetimeType, Table, Timestamp,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -299,6 +299,78 @@ fn migrate_user_to_identity(
     ctx.db.user().identity().delete(old_identity);
     user.identity = new_identity;
     ctx.db.user().insert(user);
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Google (OIDC) sign-in
+//
+// SpacetimeDB accepts any OpenID-Connect compliant JWT and derives the user's
+// `Identity` from the token's `iss` + `sub` claims. That means a Google account
+// maps to ONE stable identity across every device/browser — no password needed.
+//
+// `GOOGLE_CLIENT_ID` MUST be replaced with your real OAuth 2.0 Web client ID
+// (from Google Cloud Console) BEFORE publishing if you want Google sign-in to
+// work. It is a *public* value (not a secret), so it is fine to commit. The
+// audience (`aud`) check guarantees a token minted for some *other* app cannot
+// be replayed against this module.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GOOGLE_ISSUER: &str = "https://accounts.google.com";
+const GOOGLE_ISSUER_ALT: &str = "accounts.google.com";
+const GOOGLE_CLIENT_ID: &str =
+    "573552267813-msjua9asdqcqbrgdhjopb13ekb4tu5nh.apps.googleusercontent.com";
+
+fn validate_google_claims(jwt: &JwtClaims, expected_client_id: &str) -> Result<(), String> {
+    let iss = jwt.issuer();
+    if iss != GOOGLE_ISSUER && iss != GOOGLE_ISSUER_ALT {
+        return Err(format!("Untrusted token issuer: {iss}"));
+    }
+    if !jwt.audience().iter().any(|aud| aud == expected_client_id) {
+        return Err("Token audience does not match this application".into());
+    }
+    Ok(())
+}
+
+#[reducer]
+pub fn register_google_user(ctx: &ReducerContext, username: String) -> Result<(), String> {
+    if GOOGLE_CLIENT_ID.starts_with("REPLACE_WITH_") {
+        return Err(
+            "Google sign-in is not configured on the server (set GOOGLE_CLIENT_ID).".into(),
+        );
+    }
+
+    let jwt = ctx
+        .sender_auth()
+        .jwt()
+        .ok_or_else(|| "Google sign-in requires an OIDC token".to_string())?;
+    validate_google_claims(jwt, GOOGLE_CLIENT_ID)?;
+
+    if ctx.db.user().identity().find(ctx.sender()).is_some() {
+        return Err("Profile already exists for this identity".into());
+    }
+    if !is_valid_username(&username) {
+        return Err(format!(
+            "Username must be {}-{} chars, alphanumeric or underscore",
+            USERNAME_MIN, USERNAME_MAX
+        ));
+    }
+
+    let lower = username.to_lowercase();
+    if ctx.db.user().username_lower().find(&lower).is_some() {
+        return Err("Username is already taken".into());
+    }
+
+    // Google handles authentication, so no password is stored for these users.
+    ctx.db.user().insert(User {
+        identity: ctx.sender(),
+        username_lower: lower,
+        username,
+        password_hash: String::new(),
+        role: "student".into(),
+        current_level_cap: 1,
+        created_at: ctx.timestamp,
+    });
     Ok(())
 }
 
@@ -961,5 +1033,31 @@ mod tests {
         let hash = hash_password_with_rng(&mut rng, "secret12").expect("hash");
         assert!(verify_password("secret12", &hash));
         assert!(!verify_password("wrong", &hash));
+    }
+
+    #[test]
+    fn validate_google_claims_accepts_matching_issuer_and_audience() {
+        let client_id = "test-client.apps.googleusercontent.com";
+        let payload = format!(
+            r#"{{"iss":"https://accounts.google.com","sub":"123","aud":"{client_id}"}}"#
+        );
+        let auth = spacetimedb::AuthCtx::from_jwt_payload(payload);
+        let claims = auth.jwt().expect("claims");
+        assert!(validate_google_claims(claims, client_id).is_ok());
+    }
+
+    #[test]
+    fn validate_google_claims_rejects_wrong_audience_and_issuer() {
+        let client_id = "test-client.apps.googleusercontent.com";
+
+        let wrong_aud = spacetimedb::AuthCtx::from_jwt_payload(
+            r#"{"iss":"https://accounts.google.com","sub":"1","aud":"someone-else"}"#.to_string(),
+        );
+        assert!(validate_google_claims(wrong_aud.jwt().unwrap(), client_id).is_err());
+
+        let wrong_iss = spacetimedb::AuthCtx::from_jwt_payload(format!(
+            r#"{{"iss":"https://evil.example.com","sub":"1","aud":"{client_id}"}}"#
+        ));
+        assert!(validate_google_claims(wrong_iss.jwt().unwrap(), client_id).is_err());
     }
 }

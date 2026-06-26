@@ -101,11 +101,49 @@ Rust module unit tests:
 pnpm test:rust
 ```
 
-## Cross-device login
+## Google sign-in (OIDC)
 
-Sign in with an existing username and password on a new device. The `login_user`
-reducer verifies credentials and re-binds progress to the current device identity.
-Sign out first if the device already has a profile.
+Google "Sign in with Google" is supported via SpacetimeDB's OpenID Connect
+support. SpacetimeDB accepts any OIDC-compliant JWT and derives a **stable
+`Identity` from the token's `iss` + `sub`**, so one Google account maps to one
+identity across every device/browser automatically.
+
+The Google **client ID is public** (the client *secret* is never used in this
+browser ID-token flow), so nothing secret ships in the PWA. The button is hidden
+until `VITE_GOOGLE_CLIENT_ID` is set.
+
+### 1. Google Cloud Console
+1. APIs & Services → **OAuth consent screen**: configure (External), add your
+   email as a test user while in "Testing".
+2. APIs & Services → **Credentials → Create credentials → OAuth client ID →
+   Web application**.
+3. **Authorized JavaScript origins**: add `http://localhost:5173` (dev) and
+   `https://verbs-quest.pages.dev` (prod). No redirect URI is needed for the
+   GIS ID-token flow.
+4. Copy the **Client ID** (`...apps.googleusercontent.com`).
+
+### 2. SpacetimeDB module
+Set the same client ID as `GOOGLE_CLIENT_ID` in
+[`spacetimedb/src/lib.rs`](./spacetimedb/src/lib.rs) (used to validate the token
+`aud` claim), then rebuild + publish:
+
+```bash
+pnpm stdb:build && pnpm stdb:publish:local   # or :maincloud
+```
+
+### 3. Frontend
+Set `VITE_GOOGLE_CLIENT_ID` to the same value:
+- Local: in `.env.development.local`
+- Cloudflare Pages: as a Production environment variable
+
+The first time a Google user signs in they pick a display name (3–12 chars),
+which calls the password-less `register_google_user` reducer.
+
+## Cross-device login (username/password)
+
+Alternatively, sign in with an existing username and password on a new device.
+The `login_user` reducer verifies credentials and re-binds progress to the
+current device identity. Sign out first if the device already has a profile.
 
 After changing the Rust module, regenerate client bindings:
 

@@ -5,6 +5,7 @@
 interface ImportMetaEnv {
     readonly VITE_SPACETIMEDB_URI: string
     readonly VITE_SPACETIMEDB_DB: string
+    readonly VITE_GOOGLE_CLIENT_ID?: string
 }
 
 interface ImportMeta {

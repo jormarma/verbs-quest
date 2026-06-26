@@ -38,6 +38,7 @@ import DeleteVerbReducer from "./delete_verb_reducer";
 import LoginUserReducer from "./login_user_reducer";
 import PromoteToAdminReducer from "./promote_to_admin_reducer";
 import RegisterAdminReducer from "./register_admin_reducer";
+import RegisterGoogleUserReducer from "./register_google_user_reducer";
 import RegisterUserReducer from "./register_user_reducer";
 import SetActiveVerbCategoryReducer from "./set_active_verb_category_reducer";
 import SubmitLevelAttemptReducer from "./submit_level_attempt_reducer";
@@ -140,6 +141,7 @@ const reducersSchema = __reducers(
   __reducerSchema("login_user", LoginUserReducer),
   __reducerSchema("promote_to_admin", PromoteToAdminReducer),
   __reducerSchema("register_admin", RegisterAdminReducer),
+  __reducerSchema("register_google_user", RegisterGoogleUserReducer),
   __reducerSchema("register_user", RegisterUserReducer),
   __reducerSchema("set_active_verb_category", SetActiveVerbCategoryReducer),
   __reducerSchema("submit_level_attempt", SubmitLevelAttemptReducer),
