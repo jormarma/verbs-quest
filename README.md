@@ -60,13 +60,24 @@ Maincloud:
 pnpm stdb:publish:maincloud
 ```
 
+## Tests
+
+Unit and component tests use [Vitest](https://vitest.dev/):
+
+```bash
+pnpm test          # run once
+pnpm test:watch    # watch mode
+```
+
+Pure game logic lives under `src/lib/game/` with co-located `*.test.ts` files.
+
 ## Full verification
 
 ```bash
 pnpm verify
 ```
 
-Runs lint + production build + admin-verbs smoke test.
+Runs lint + unit tests + production build + admin-verbs smoke test.
 
 ## Import verbs from CSV
 
