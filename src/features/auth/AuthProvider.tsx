@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { useTable } from 'spacetimedb/react'
+import { useSpacetimeDB, useTable } from 'spacetimedb/react'
 import { tables } from '../../lib/spacetime/module_bindings'
 import type { User } from '../../lib/spacetime/module_bindings/types'
-import { getConnection, connect, clearStoredToken } from '../../lib/spacetime/client'
+import { getConnection, clearStoredToken } from '../../lib/spacetime/client'
 import { Button } from '../../components/ui/Button'
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher'
 import { AuthContext } from './AuthContext'
@@ -13,8 +13,8 @@ import { useTranslation } from '../../lib/hooks/useTranslation'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const { t } = useTranslation()
-    const [identityHex, setIdentityHex] = useState<string | null>(null)
-    const [isConnected, setIsConnected] = useState(false)
+    const { isActive: isConnected, identity, connectionError } = useSpacetimeDB()
+    const identityHex = identity?.toHexString() ?? null
     const [hasProfile, setHasProfile] = useState<boolean | null>(null)
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
@@ -40,30 +40,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRepeatPassword('')
         setAuthError('')
         setIsRegistering(false)
-    }, [])
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Connection lifecycle
-    // ──────────────────────────────────────────────────────────────────────
-
-    useEffect(() => {
-        let cancelled = false
-        connect()
-            .then(({ identityHex }) => {
-                if (cancelled) return
-                setIdentityHex(identityHex)
-                setIsConnected(true)
-            })
-            .catch((err) => {
-                console.error('[auth] failed to connect to SpacetimeDB:', err)
-                if (!cancelled) {
-                    setIsConnected(false)
-                    setLoading(false)
-                }
-            })
-        return () => {
-            cancelled = true
-        }
     }, [])
 
     // ──────────────────────────────────────────────────────────────────────
@@ -165,7 +141,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.location.reload()
     }
 
-    if (loading) {
+    if (!isConnected) {
+        if (connectionError) {
+            return (
+                <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+                    <div className="text-center max-w-md p-6">
+                        <h2 className="text-2xl font-black text-rose-400 mb-2">
+                            Cannot reach the database
+                        </h2>
+                        <p className="text-slate-300">
+                            Make sure SpacetimeDB is running locally
+                            (<code className="font-mono text-emerald-300">spacetime start</code>).
+                        </p>
+                    </div>
+                </div>
+            )
+        }
         return (
             <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
                 <div className="animate-pulse rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
@@ -173,18 +164,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
     }
 
-    if (!isConnected) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-                <div className="text-center max-w-md p-6">
-                    <h2 className="text-2xl font-black text-rose-400 mb-2">
-                        Cannot reach the database
-                    </h2>
-                    <p className="text-slate-300">
-                        Make sure SpacetimeDB is running locally
-                        (<code className="font-mono text-emerald-300">spacetime start</code>).
-                    </p>
-                </div>
+                <div className="animate-pulse rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
             </div>
         )
     }
