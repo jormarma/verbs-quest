@@ -93,8 +93,8 @@ then run `pnpm test`, `pnpm lint`, and `pnpm build` before commit.
 
 ### Acceptance criteria
 
-- [ ] Admin can toggle preview and see student UI
-- [ ] Toggle back restores admin dashboard
+- [x] Admin can toggle preview and see student UI
+- [x] Toggle back restores admin dashboard
 
 ---
 
