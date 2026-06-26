@@ -1,5 +1,5 @@
 # Cloudflare Pages — wrangler.toml is the source of truth when V2 build system is enabled.
 # Git deploys: set build command to `pnpm build:prod` in the dashboard (or use the GitHub Action).
 name = "verbs-quest"
-pages_build_output_dir = "./dist"
+pages_build_output_dir = "./docs"
 compatibility_date = "2024-09-23"
