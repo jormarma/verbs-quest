@@ -129,14 +129,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         try {
             const conn = getConnection()
-            // For "sign-in" semantics we'd need cross-device login (not in MVP),
-            // so a returning user re-registers as a fresh identity here. The
-            // password is still stored so future cross-device support can be
-            // added without a schema change.
-            await conn.reducers.registerUser({
-                username: username.trim(),
-                password,
-            })
+            if (isRegistering) {
+                await conn.reducers.registerUser({
+                    username: username.trim(),
+                    password,
+                })
+            } else {
+                await conn.reducers.loginUser({
+                    username: username.trim(),
+                    password,
+                })
+            }
             setUsername('')
             setPassword('')
             setRepeatPassword('')

@@ -5,7 +5,7 @@
 // overview, category switching, settings updates). Auth is identity-based:
 // each connection's `ctx.sender()` is the canonical user identifier. Usernames
 // are unique globally; passwords are stored as argon2 hashes for forward
-// compatibility (no cross-device login in this MVP).
+// compatibility (cross-device login via login_user reducer).
 
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
@@ -42,7 +42,6 @@ fn hash_password_with_rng<R: RngCore>(
     Ok(hash)
 }
 
-#[allow(dead_code)]
 fn verify_password(password: &str, hash: &str) -> bool {
     let parsed = match PasswordHash::new(hash) {
         Ok(p) => p,
@@ -235,6 +234,71 @@ pub fn register_user(
         current_level_cap: 1,
         created_at: ctx.timestamp,
     });
+    Ok(())
+}
+
+#[reducer]
+pub fn login_user(
+    ctx: &ReducerContext,
+    username: String,
+    password: String,
+) -> Result<(), String> {
+    if ctx.db.user().identity().find(ctx.sender()).is_some() {
+        return Err("This device already has a profile. Sign out first.".into());
+    }
+
+    let lower = username.to_lowercase();
+    let existing = ctx
+        .db
+        .user()
+        .username_lower()
+        .find(&lower)
+        .ok_or_else(|| "Username not found".to_string())?;
+
+    if !verify_password(&password, &existing.password_hash) {
+        return Err("Invalid password".into());
+    }
+
+    migrate_user_to_identity(ctx, existing, ctx.sender())
+}
+
+fn migrate_user_to_identity(
+    ctx: &ReducerContext,
+    mut user: User,
+    new_identity: Identity,
+) -> Result<(), String> {
+    let old_identity = user.identity;
+    if old_identity == new_identity {
+        return Ok(());
+    }
+
+    let sessions: Vec<GameSession> = ctx
+        .db
+        .game_session()
+        .iter()
+        .filter(|session| session.user_identity == old_identity)
+        .collect();
+
+    for session in sessions {
+        ctx.db.game_session().id().update(GameSession {
+            user_identity: new_identity,
+            ..session
+        });
+    }
+
+    if let Some(attempt) = ctx.db.user_attempt().identity().find(old_identity) {
+        ctx.db.user_attempt().identity().delete(old_identity);
+        ctx.db.user_attempt().insert(UserAttempt {
+            identity: new_identity,
+            last_status: attempt.last_status,
+            last_new_level: attempt.last_new_level,
+            last_completed_at: attempt.last_completed_at,
+        });
+    }
+
+    ctx.db.user().identity().delete(old_identity);
+    user.identity = new_identity;
+    ctx.db.user().insert(user);
     Ok(())
 }
 
@@ -876,4 +940,26 @@ fn days_from_civil(y: i32, m: i32, d: i32) -> i64 {
     let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     (era as i64) * 146_097 + doe - 719_468
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    #[test]
+    fn is_valid_username_accepts_alphanumeric_underscore() {
+        assert!(is_valid_username("player_1"));
+        assert!(!is_valid_username("ab"));
+        assert!(!is_valid_username("bad name"));
+    }
+
+    #[test]
+    fn verify_password_accepts_matching_hash() {
+        let mut rng = StdRng::seed_from_u64(42);
+        let hash = hash_password_with_rng(&mut rng, "secret12").expect("hash");
+        assert!(verify_password("secret12", &hash));
+        assert!(!verify_password("wrong", &hash));
+    }
 }

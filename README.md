@@ -71,6 +71,24 @@ pnpm test:watch    # watch mode
 
 Pure game logic lives under `src/lib/game/` with co-located `*.test.ts` files.
 
+Rust module unit tests:
+
+```bash
+pnpm test:rust
+```
+
+## Cross-device login
+
+Sign in with an existing username and password on a new device. The `login_user`
+reducer verifies credentials and re-binds progress to the current device identity.
+Sign out first if the device already has a profile.
+
+After changing the Rust module, regenerate client bindings:
+
+```bash
+pnpm stdb:generate
+```
+
 ## Full verification
 
 ```bash

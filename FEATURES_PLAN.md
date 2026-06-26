@@ -54,9 +54,9 @@ then run `pnpm test`, `pnpm lint`, and `pnpm build` before commit.
 
 ### Acceptance criteria
 
-- [ ] `shouldSubmitLevelAttempt('practice')` is false
-- [ ] Practice run does not call `submitLevelAttempt`
-- [ ] Quest behavior unchanged
+- [x] `shouldSubmitLevelAttempt('practice')` is false
+- [x] Practice run does not call `submitLevelAttempt`
+- [x] Quest behavior unchanged
 
 ---
 
@@ -64,9 +64,9 @@ then run `pnpm test`, `pnpm lint`, and `pnpm build` before commit.
 
 ### Acceptance criteria
 
-- [ ] Timer elapsed accounts for paused duration
-- [ ] Physical key handler for letter/backspace/enter
-- [ ] Pause stops countdown to zero
+- [x] Timer elapsed accounts for paused duration
+- [x] Physical key handler for letter/backspace/enter
+- [x] Pause stops countdown to zero
 
 ---
 
@@ -74,8 +74,8 @@ then run `pnpm test`, `pnpm lint`, and `pnpm build` before commit.
 
 ### Acceptance criteria
 
-- [ ] Stats increment on wrong answers
-- [ ] Weak-verb practice starts practice mode with targeted verbs
+- [x] Stats increment on wrong answers
+- [x] Weak-verb practice starts practice mode with targeted verbs
 
 ---
 
@@ -83,9 +83,9 @@ then run `pnpm test`, `pnpm lint`, and `pnpm build` before commit.
 
 ### Acceptance criteria
 
-- [ ] `login_user` reducer with identity migration
-- [ ] Client sign-in calls `loginUser`
-- [ ] Rust unit tests for auth helpers
+- [x] `login_user` reducer with identity migration
+- [x] Client sign-in calls `loginUser`
+- [x] Rust unit tests for auth helpers
 
 ---
 

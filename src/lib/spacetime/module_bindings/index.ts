@@ -35,6 +35,7 @@ import {
 
 // Import all reducer arg schemas
 import DeleteVerbReducer from "./delete_verb_reducer";
+import LoginUserReducer from "./login_user_reducer";
 import PromoteToAdminReducer from "./promote_to_admin_reducer";
 import RegisterAdminReducer from "./register_admin_reducer";
 import RegisterUserReducer from "./register_user_reducer";
@@ -136,6 +137,7 @@ const tablesSchema = __schema({
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("delete_verb", DeleteVerbReducer),
+  __reducerSchema("login_user", LoginUserReducer),
   __reducerSchema("promote_to_admin", PromoteToAdminReducer),
   __reducerSchema("register_admin", RegisterAdminReducer),
   __reducerSchema("register_user", RegisterUserReducer),

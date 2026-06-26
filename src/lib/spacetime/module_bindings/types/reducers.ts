@@ -7,6 +7,7 @@ import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
 import DeleteVerbReducer from "../delete_verb_reducer";
+import LoginUserReducer from "../login_user_reducer";
 import PromoteToAdminReducer from "../promote_to_admin_reducer";
 import RegisterAdminReducer from "../register_admin_reducer";
 import RegisterUserReducer from "../register_user_reducer";
@@ -17,6 +18,7 @@ import UpdateAppSettingsReducer from "../update_app_settings_reducer";
 import UpsertVerbReducer from "../upsert_verb_reducer";
 
 export type DeleteVerbParams = __Infer<typeof DeleteVerbReducer>;
+export type LoginUserParams = __Infer<typeof LoginUserReducer>;
 export type PromoteToAdminParams = __Infer<typeof PromoteToAdminReducer>;
 export type RegisterAdminParams = __Infer<typeof RegisterAdminReducer>;
 export type RegisterUserParams = __Infer<typeof RegisterUserReducer>;
