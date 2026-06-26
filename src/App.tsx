@@ -14,6 +14,7 @@ import { useProfile } from './lib/hooks/useProfile'
 import { useTotalLevels } from './lib/hooks/useTotalLevels'
 import { useWeakVerbQuestions } from './lib/hooks/useWeakVerbQuestions'
 import { useAppSettings } from './lib/hooks/useAppSettings'
+import { useAdminPreviewStore } from './lib/stores/useAdminPreviewStore'
 import { AdminDashboard } from './features/admin/AdminDashboard'
 import { GlobalLeaderboardTable } from './features/admin/GlobalLeaderboardTable'
 
@@ -29,6 +30,8 @@ function GameBoard() {
   const { session, gameplay, startGame, startLevelTimer, cancelGame, resetGame, pauseGame, resumeGame } = useGameStore()
   const { username, signOut } = useAuth()
   const { t, tVerb } = useTranslation()
+  const previewAsStudent = useAdminPreviewStore((state) => state.previewAsStudent)
+  const setPreviewAsStudent = useAdminPreviewStore((state) => state.setPreviewAsStudent)
 
   const { levelCap, role, isLoadingProfile } = useProfile()
   const { totalLevels, isLoadingTotalLevels } = useTotalLevels()
@@ -127,8 +130,8 @@ function GameBoard() {
     startGame(levelToPlay, weakQuestions, false, { gameMode: 'practice' })
   }
 
-  // Admin Override Route
-  if (!isLoadingProfile && role === 'admin') {
+  // Admin dashboard unless previewing the student experience
+  if (!isLoadingProfile && role === 'admin' && !previewAsStudent) {
     return <AdminDashboard />
   }
 
@@ -223,6 +226,16 @@ function GameBoard() {
                     @{username}
                   </span>
                 </div>
+              )}
+              {role === 'admin' && previewAsStudent && session.status === 'IDLE' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPreviewAsStudent(false)}
+                  className="text-amber-300 border-amber-500/50 hover:bg-amber-950/40 font-bold"
+                >
+                  {t('admin.back_to_dashboard')}
+                </Button>
               )}
             </div>
 

@@ -2,16 +2,18 @@ import { useState, useEffect } from 'react'
 import { useAdminStats } from '../../lib/hooks/useAdminStats'
 import type { AdminUserOverview } from '../../lib/hooks/useAdminStats'
 import { Button } from '../../components/ui/Button'
-import { LogOut, ArrowLeft, Trophy, Flag, Timer, ChevronUp, ChevronDown, Check, Calendar, Clock, XCircle, SlidersHorizontal, ListPlus, ChartColumnBig } from 'lucide-react'
+import { LogOut, ArrowLeft, Trophy, Flag, Timer, ChevronUp, ChevronDown, Check, Calendar, Clock, XCircle, SlidersHorizontal, ListPlus, ChartColumnBig, GraduationCap } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { GlobalLeaderboardTable } from './GlobalLeaderboardTable'
 import { AdminSettingsPanel } from './AdminSettingsPanel'
 import { AdminVerbsPanel } from './AdminVerbsPanel'
 import { useTranslation } from '../../lib/hooks/useTranslation'
+import { useAdminPreviewStore } from '../../lib/stores/useAdminPreviewStore'
 
 export function AdminDashboard() {
     const { signOut } = useAuth()
     const { t } = useTranslation()
+    const setPreviewAsStudent = useAdminPreviewStore((state) => state.setPreviewAsStudent)
     const {
         detailsData,
         isLoadingDetails,
@@ -128,10 +130,21 @@ export function AdminDashboard() {
                         </h1>
                         <p className="text-sm text-slate-400 font-medium">{t('admin.subtitle')}</p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={signOut} className="flex gap-2 shrink-0">
-                        <LogOut className="w-4 h-4" />
-                        {t('auth.signout')}
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => setPreviewAsStudent(true)}
+                            className="flex gap-2"
+                        >
+                            <GraduationCap className="w-4 h-4" />
+                            {t('admin.preview_as_student')}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={signOut} className="flex gap-2">
+                            <LogOut className="w-4 h-4" />
+                            {t('auth.signout')}
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Content Area */}
