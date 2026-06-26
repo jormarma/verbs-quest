@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:prod": "tsc -b && vite build --mode production",
+    "deploy:cloudflare": "pnpm build:prod && npx wrangler pages deploy dist --project-name=verbs-quest --branch=main",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

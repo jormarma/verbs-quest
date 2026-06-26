@@ -1,8 +1,6 @@
 name: Deploy to Cloudflare Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -30,10 +28,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm build:prod
-      - run: rm -rf docs && cp -R dist docs
 
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy docs --project-name=verbs-quest --branch=main
+          command: pages deploy dist --project-name=verbs-quest --branch=main
