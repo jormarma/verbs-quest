@@ -1,8 +1,9 @@
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useCallback } from 'react'
 import { useGameStore } from '../../lib/stores/useGameStore'
 import { useTranslation } from '../../lib/hooks/useTranslation'
 import { Button } from '../ui/Button'
 import { Delete, CheckCircle2, XCircle } from 'lucide-react'
+import { resolvePhysicalKey } from '../../lib/game/keyboardInput'
 import { cn } from '../../lib/utils/cn'
 
 const VOWELS = ['A', 'E', 'I', 'O', 'U']
@@ -42,7 +43,7 @@ function getDeterministicExtras(seedSource: string, pool: string[], count: numbe
 }
 
 export function VirtualKeyboard() {
-    const { gameplay, session, setInput, submitAnswer, advanceQuestion } = useGameStore()
+    const { gameplay, session, setInput } = useGameStore()
     const { t } = useTranslation()
     const { currentInput, feedbackState, feedbackTarget } = gameplay
 
@@ -91,26 +92,51 @@ export function VirtualKeyboard() {
         setInput(currentInput.slice(0, -1))
     }
 
-    const handleEnter = () => {
-        if (feedbackState !== 'NONE') {
-            advanceQuestion()
+    const handleEnter = useCallback(() => {
+        const { gameplay: g, submitAnswer: submit, advanceQuestion: advance } = useGameStore.getState()
+        if (g.feedbackState !== 'NONE') {
+            advance()
             return
         }
-        if (currentInput.trim().length > 0) {
-            submitAnswer(currentInput)
+        if (g.currentInput.trim().length > 0) {
+            submit(g.currentInput)
         }
-    }
+    }, [])
 
-    // Auto advance on keyboard enter if feedback is showing
+    // Physical keyboard: letters, backspace, and enter while playing
     useEffect(() => {
+        if (session.status !== 'PLAYING') return
+
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Enter' && feedbackState !== 'NONE') {
-                advanceQuestion()
+            const action = resolvePhysicalKey(e.key)
+            if (action.type === 'ignore') return
+
+            e.preventDefault()
+
+            const state = useGameStore.getState()
+            const { gameplay: g, setInput: set, submitAnswer: submit, advanceQuestion: advance } = state
+
+            if (action.type === 'enter') {
+                if (g.feedbackState !== 'NONE') {
+                    advance()
+                } else if (g.currentInput.trim().length > 0) {
+                    submit(g.currentInput)
+                }
+                return
+            }
+
+            if (g.feedbackState !== 'NONE') return
+
+            if (action.type === 'letter') {
+                set(g.currentInput + action.char)
+            } else if (action.type === 'backspace') {
+                set(g.currentInput.slice(0, -1))
             }
         }
+
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [feedbackState, advanceQuestion])
+    }, [session.status])
 
     return (
         <div className="relative w-full max-w-3xl mx-auto p-2 sm:p-3 bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col justify-center">
@@ -139,7 +165,7 @@ export function VirtualKeyboard() {
                 <Button
                     variant="default"
                     className="w-full max-w-sm h-14 mt-4 text-lg font-bold animate-bounce"
-                    onClick={advanceQuestion}
+                    onClick={handleEnter}
                 >
                     {t('keyboard.next_question')}
                 </Button>

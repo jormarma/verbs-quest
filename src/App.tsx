@@ -6,7 +6,7 @@ import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { LogOut, BookOpen, Swords, Play, Trophy, ArrowLeft, GraduationCap } from 'lucide-react'
+import { LogOut, BookOpen, Swords, Play, Trophy, ArrowLeft, GraduationCap, Pause } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
@@ -25,7 +25,7 @@ import { getRunReviewItems } from './lib/game/runReview'
 import { isPracticeMode } from './lib/game/gameMode'
 
 function GameBoard() {
-  const { session, gameplay, startGame, startLevelTimer, cancelGame, resetGame } = useGameStore()
+  const { session, gameplay, startGame, startLevelTimer, cancelGame, resetGame, pauseGame, resumeGame } = useGameStore()
   const { username, signOut } = useAuth()
   const { t, tVerb } = useTranslation()
 
@@ -135,7 +135,8 @@ function GameBoard() {
 
   // Derived state to show current question
   const isMainQueue = gameplay.currentQuestionIndex < gameplay.mainQueue.length
-  const currentQ = session.status === 'PLAYING' ? (
+  const isActiveRun = session.status === 'PLAYING' || session.status === 'PAUSED'
+  const currentQ = isActiveRun ? (
     isMainQueue
       ? gameplay.mainQueue[gameplay.currentQuestionIndex]
       : gameplay.retryQueue[gameplay.currentQuestionIndex - gameplay.mainQueue.length]
@@ -222,6 +223,10 @@ function GameBoard() {
             <div className="flex items-center gap-2">
               {session.status === 'PLAYING' && countdown === null && !isPracticeRun ? (
                 <Timer />
+              ) : session.status === 'PAUSED' && !isPracticeRun ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-900/40 border border-amber-500/50 text-amber-200 text-sm font-bold uppercase tracking-wider">
+                  {t('pause.paused')}
+                </div>
               ) : session.status === 'PLAYING' && countdown === null && isPracticeRun ? (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-900/40 border border-emerald-600/50 text-emerald-200 text-sm font-bold uppercase tracking-wider">
                   {t('practice.badge')}
@@ -385,7 +390,7 @@ function GameBoard() {
           )}
 
           {/* Cancel Modal (Overlay over PLAYING area) */}
-          {showCancelModal && session.status === 'PLAYING' && (
+          {showCancelModal && isActiveRun && (
             <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm -mx-4 md:-mx-8">
               <div className="bg-slate-800 border border-slate-700 shadow-2xl rounded-2xl p-6 text-center max-w-sm w-full animate-in zoom-in-95 duration-200">
                 <h3 className="text-2xl font-black text-rose-500 mb-2">{t('quest.give_up')}</h3>
@@ -408,7 +413,7 @@ function GameBoard() {
             </div>
           )}
 
-          {session.status === 'PLAYING' && currentQ && (
+          {isActiveRun && currentQ && (
             <div className="w-full flex-1 flex flex-col items-center justify-center gap-4 sm:gap-8 md:gap-12 animate-in zoom-in-95 duration-500 relative">
               {/* Countdown Modal Overlay over the gameplay screen */}
               {countdown !== null && (
@@ -422,6 +427,17 @@ function GameBoard() {
                         {countdown}
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {session.status === 'PAUSED' && (
+                <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm rounded-2xl">
+                  <div className="text-center space-y-4 p-6">
+                    <p className="text-2xl font-black text-amber-300">{t('pause.paused')}</p>
+                    <Button variant="default" onClick={resumeGame} className="font-bold">
+                      {t('pause.resume')}
+                    </Button>
                   </div>
                 </div>
               )}
@@ -471,14 +487,26 @@ function GameBoard() {
                 </div>
               </div>
 
-              {/* Cancel Button (Middle Area) */}
-              <Button
-                variant="destructive"
-                onClick={() => setShowCancelModal(true)}
-                className="mt-0 sm:mt-2 text-xs sm:text-sm font-bold tracking-wide"
-              >
-                {t('quest.cancel_run')}
-              </Button>
+              {/* Cancel / Pause controls */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-0 sm:mt-2">
+                {(session.status === 'PLAYING' || session.status === 'PAUSED') && countdown === null && session.gameMode === 'quest' && (
+                  <Button
+                    variant="outline"
+                    onClick={session.status === 'PAUSED' ? resumeGame : pauseGame}
+                    className="text-xs sm:text-sm font-bold tracking-wide"
+                  >
+                    <Pause className="w-4 h-4 mr-1" />
+                    {session.status === 'PAUSED' ? t('pause.resume') : t('pause.pause')}
+                  </Button>
+                )}
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowCancelModal(true)}
+                  className="text-xs sm:text-sm font-bold tracking-wide"
+                >
+                  {t('quest.cancel_run')}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -637,8 +665,8 @@ function GameBoard() {
         </section>
 
         {/* Keyboard Footer */}
-        {session.status === 'PLAYING' && (
-          <div className={cn("w-full pb-2 md:pb-4 transition-opacity duration-300", countdown !== null ? "opacity-50 pointer-events-none" : "animate-in slide-in-from-bottom-24 duration-500")}>
+        {isActiveRun && (
+          <div className={cn("w-full pb-2 md:pb-4 transition-opacity duration-300", countdown !== null || session.status === 'PAUSED' ? "opacity-50 pointer-events-none" : "animate-in slide-in-from-bottom-24 duration-500")}>
             <VirtualKeyboard />
           </div>
         )}

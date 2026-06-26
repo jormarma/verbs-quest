@@ -149,6 +149,9 @@ export const en: TranslationDict = {
     "practice.start": "Practice level {level}",
     "practice.complete": "Practice complete!",
     "practice.perfect": "Perfect practice run — no errors!",
+    "pause.pause": "Pause",
+    "pause.resume": "Resume",
+    "pause.paused": "Paused",
     "update.available": "New version available",
     "update.action": "Update Now"
 }
@@ -298,6 +301,9 @@ export const es: TranslationDict = {
     "practice.start": "Practicar nivel {level}",
     "practice.complete": "¡Práctica completada!",
     "practice.perfect": "¡Práctica perfecta — sin errores!",
+    "pause.pause": "Pausar",
+    "pause.resume": "Continuar",
+    "pause.paused": "En pausa",
     "update.available": "Nueva versión disponible",
     "update.action": "Actualizar Ahora"
 }

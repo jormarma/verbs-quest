@@ -34,6 +34,8 @@ export interface GameState {
         status: GameStatus
         gameMode: GameMode
         startTime: number | null
+        pausedAt: number | null
+        totalPausedMs: number
         endTime: number | null
         config: {
             timeLimit: number
@@ -79,6 +81,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         status: "IDLE",
         gameMode: "quest",
         startTime: null,
+        pausedAt: null,
+        totalPausedMs: 0,
         endTime: null,
         config: {
             timeLimit: 180,
@@ -113,6 +117,8 @@ export const useGameStore = create<GameState>((set, get) => ({
                 status: "PLAYING",
                 gameMode,
                 startTime: useCountdown ? null : Date.now(),
+                pausedAt: null,
+                totalPausedMs: 0,
                 endTime: null,
                 config: {
                     timeLimit: resolvedTimeLimit,
@@ -243,13 +249,33 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
     }),
 
-    pauseGame: () => set((state) => ({
-        session: { ...state.session, status: "PAUSED" } // Also could track paused duration
-    })),
+    pauseGame: () => set((state) => {
+        if (state.session.status !== 'PLAYING' || state.session.pausedAt !== null) {
+            return state
+        }
+        return {
+            session: {
+                ...state.session,
+                status: 'PAUSED',
+                pausedAt: Date.now(),
+            },
+        }
+    }),
 
-    resumeGame: () => set((state) => ({
-        session: { ...state.session, status: "PLAYING" }
-    })),
+    resumeGame: () => set((state) => {
+        if (state.session.status !== 'PAUSED' || state.session.pausedAt === null) {
+            return state
+        }
+        const pauseDuration = Date.now() - state.session.pausedAt
+        return {
+            session: {
+                ...state.session,
+                status: 'PLAYING',
+                pausedAt: null,
+                totalPausedMs: state.session.totalPausedMs + pauseDuration,
+            },
+        }
+    }),
 
     resetGame: () => set({
         session: {
@@ -257,6 +283,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             status: "IDLE",
             gameMode: "quest",
             startTime: null,
+            pausedAt: null,
+            totalPausedMs: 0,
             endTime: null,
             config: { timeLimit: 180, baseQuestionCount: 5 }
         },
@@ -281,6 +309,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             status: "IDLE",
             gameMode: "quest",
             startTime: null,
+            pausedAt: null,
+            totalPausedMs: 0,
             endTime: null,
         },
         gameplay: {

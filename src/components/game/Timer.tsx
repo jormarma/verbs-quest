@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../lib/stores/useGameStore'
 import { shouldRunLevelTimer } from '../../lib/game/gameMode'
+import { computeElapsedSeconds, computeRemainingSeconds } from '../../lib/game/timerElapsed'
 import { Clock } from 'lucide-react'
 import { cn } from '../../lib/utils/cn'
 import { useTranslation } from '../../lib/hooks/useTranslation'
@@ -11,11 +12,22 @@ export function Timer() {
     const [timeLeft, setTimeLeft] = useState(session.config.timeLimit)
 
     useEffect(() => {
-        if (session.status !== 'PLAYING' || !session.startTime || !shouldRunLevelTimer(session.gameMode)) return
+        if (
+            session.status !== 'PLAYING'
+            || !session.startTime
+            || !shouldRunLevelTimer(session.gameMode)
+        ) {
+            return
+        }
 
         const interval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - session.startTime!) / 1000)
-            const remaining = Math.max(0, session.config.timeLimit - elapsed)
+            const elapsed = computeElapsedSeconds(
+                Date.now(),
+                session.startTime!,
+                session.totalPausedMs,
+                session.pausedAt,
+            )
+            const remaining = computeRemainingSeconds(session.config.timeLimit, elapsed)
 
             setTimeLeft(remaining)
 
@@ -26,9 +38,15 @@ export function Timer() {
         }, 1000)
 
         return () => clearInterval(interval)
-    }, [session.status, session.startTime, session.config.timeLimit, session.gameMode])
+    }, [
+        session.status,
+        session.startTime,
+        session.config.timeLimit,
+        session.gameMode,
+        session.totalPausedMs,
+        session.pausedAt,
+    ])
 
-    // Formatting MM:SS
     const minutes = Math.floor(timeLeft / 60)
     const seconds = timeLeft % 60
     const isLowTime = timeLeft <= 15
@@ -44,7 +62,6 @@ export function Timer() {
             <span className="font-mono text-base md:text-lg font-bold tracking-wider leading-none">
                 {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
             </span>
-            {/* Show errors as part of the HUD */}
             <div className="ml-2 pl-2 md:ml-3 md:pl-3 border-l border-slate-600/50 flex items-center gap-1.5 text-sm md:text-base font-bold">
                 <span className="text-slate-400 hidden sm:inline">{t('timer.errors')}:</span>
                 <span className="text-slate-400 sm:hidden">{t('timer.err')}:</span>
