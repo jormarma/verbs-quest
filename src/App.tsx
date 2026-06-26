@@ -6,12 +6,13 @@ import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { LogOut, BookOpen, Swords, Play, Trophy, ArrowLeft, GraduationCap, Pause } from 'lucide-react'
+import { LogOut, BookOpen, Swords, Play, Trophy, ArrowLeft, GraduationCap, Pause, Target } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
 import { useProfile } from './lib/hooks/useProfile'
 import { useTotalLevels } from './lib/hooks/useTotalLevels'
+import { useWeakVerbQuestions } from './lib/hooks/useWeakVerbQuestions'
 import { useAppSettings } from './lib/hooks/useAppSettings'
 import { AdminDashboard } from './features/admin/AdminDashboard'
 import { GlobalLeaderboardTable } from './features/admin/GlobalLeaderboardTable'
@@ -50,6 +51,7 @@ function GameBoard() {
     return () => window.clearTimeout(timeoutId)
   }, [effectiveLevelCap, levelCap])
   const { questions, isLoading, error } = useVerbs(levelToPlay, settings.verbsPerLevel)
+  const { questions: weakQuestions, hasWeakVerbs } = useWeakVerbQuestions(settings.verbsPerLevel)
   const lessonVerbs = useMemo(
     () => Array.from(new Set(questions.map((q) => q.infinitive))).sort((a, b) => a.localeCompare(b)),
     [questions]
@@ -118,6 +120,11 @@ function GameBoard() {
 
   const handleStartPractice = () => {
     startGame(levelToPlay, questions, false, { gameMode: 'practice' })
+  }
+
+  const handleStartWeakPractice = () => {
+    if (weakQuestions.length === 0) return
+    startGame(levelToPlay, weakQuestions, false, { gameMode: 'practice' })
   }
 
   // Admin Override Route
@@ -363,6 +370,15 @@ function GameBoard() {
                       >
                         <GraduationCap className="w-4 h-4 mr-2" />
                         {isLoading ? t('quest.loading') : t('practice.start', { level: levelToPlay })}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={isLoading || !hasWeakVerbs}
+                        className="w-full h-12 sm:h-14 font-bold text-base sm:text-lg border-rose-600/50 text-rose-300 hover:bg-rose-950/40"
+                        onClick={handleStartWeakPractice}
+                      >
+                        <Target className="w-4 h-4 mr-2" />
+                        {t('weak_practice.start')}
                       </Button>
                     </div>
                   </div>

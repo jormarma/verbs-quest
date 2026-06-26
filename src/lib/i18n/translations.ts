@@ -152,6 +152,7 @@ export const en: TranslationDict = {
     "pause.pause": "Pause",
     "pause.resume": "Resume",
     "pause.paused": "Paused",
+    "weak_practice.start": "Practice my weak verbs",
     "update.available": "New version available",
     "update.action": "Update Now"
 }
@@ -304,6 +305,7 @@ export const es: TranslationDict = {
     "pause.pause": "Pausar",
     "pause.resume": "Continuar",
     "pause.paused": "En pausa",
+    "weak_practice.start": "Practicar verbos difíciles",
     "update.available": "Nueva versión disponible",
     "update.action": "Actualizar Ahora"
 }

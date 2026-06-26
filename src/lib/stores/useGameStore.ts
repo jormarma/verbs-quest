@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { submitLevelAttempt } from '../utils/sync'
 import { shouldSubmitLevelAttempt, type GameMode } from '../game/gameMode'
+import { recordVerbError } from '../game/verbStats'
 
 export type GameStatus = "IDLE" | "PLAYING" | "PAUSED" | "FINISHED"
 export type SubmissionStatus = "unlocked" | "maintained" | "downgraded" | "rejected" | null
@@ -180,6 +181,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 }
             }
         } else {
+            recordVerbError(currentQ.infinitive)
             const updatedRetryQueue = [...state.gameplay.retryQueue, currentQ]
             return {
                 gameplay: {
