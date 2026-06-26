@@ -20,9 +20,11 @@ import { GlobalLeaderboardTable } from './features/admin/GlobalLeaderboardTable'
 import { useTranslation } from './lib/hooks/useTranslation'
 import { LanguageSwitcher } from './components/ui/LanguageSwitcher'
 import { UpdateBanner } from './components/ui/UpdateBanner'
+import { RunReviewPanel } from './components/game/RunReviewPanel'
+import { getRunReviewItems } from './lib/game/runReview'
 
 function GameBoard() {
-  const { session, gameplay, startGame, startLevelTimer, cancelGame } = useGameStore()
+  const { session, gameplay, startGame, startLevelTimer, cancelGame, resetGame } = useGameStore()
   const { username, signOut } = useAuth()
   const { t, tVerb } = useTranslation()
 
@@ -50,6 +52,10 @@ function GameBoard() {
   const lessonVerbs = useMemo(
     () => Array.from(new Set(questions.map((q) => q.infinitive))).sort((a, b) => a.localeCompare(b)),
     [questions]
+  )
+  const runReviewItems = useMemo(
+    () => getRunReviewItems(gameplay.history),
+    [gameplay.history],
   )
   const isLeaderboardLobby = session.status === 'IDLE' && lobbyView === 'leaderboard'
   const isPlayLobby = session.status === 'IDLE' && lobbyView === 'play'
@@ -136,6 +142,11 @@ function GameBoard() {
   const unlockedByThisRun = hasServerSubmission
     ? (gameplay.submissionStatus === 'unlocked' && gameplay.submissionNewLevel === session.level + 1)
     : session.level >= effectiveLevelCap
+
+  const handleContinueAfterRun = () => {
+    resetGame()
+    setLobbyView('play')
+  }
 
   return (
     <div className="relative h-[100dvh] w-full font-sans text-slate-100 overflow-hidden flex flex-col">
@@ -486,6 +497,10 @@ function GameBoard() {
                 )}
               </div>
 
+              {runReviewItems.length > 0 && (
+                <RunReviewPanel items={runReviewItems} />
+              )}
+
               {/* Leaderboard Section */}
               {!isFailedRun && (
                 <div className="w-full max-w-lg bg-slate-900/60 backdrop-blur border border-slate-700 p-4 md:p-6 rounded-2xl shadow-xl mt-2 md:mt-4">
@@ -575,7 +590,7 @@ function GameBoard() {
               )}
 
               <Button
-                onClick={() => window.location.reload()}
+                onClick={handleContinueAfterRun}
                 className="mt-4"
                 variant="default"
               >

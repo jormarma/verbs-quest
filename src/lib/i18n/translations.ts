@@ -142,6 +142,9 @@ export const en: TranslationDict = {
     "keyboard.next_question": "NEXT QUESTION",
     "keyboard.enter": "ENTER",
     "keyboard.submit_answer": "SUBMIT",
+    "review.title": "Review mistakes",
+    "review.your_answer": "You typed:",
+    "review.correct": "Correct:",
     "update.available": "New version available",
     "update.action": "Update Now"
 }
@@ -284,6 +287,9 @@ export const es: TranslationDict = {
     "keyboard.next_question": "SIGUIENTE PREGUNTA",
     "keyboard.enter": "INTRO",
     "keyboard.submit_answer": "ENVIAR",
+    "review.title": "Revisa los errores",
+    "review.your_answer": "Escribiste:",
+    "review.correct": "Correcto:",
     "update.available": "Nueva versión disponible",
     "update.action": "Actualizar Ahora"
 }
