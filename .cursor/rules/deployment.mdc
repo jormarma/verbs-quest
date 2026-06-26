@@ -1,0 +1,43 @@
+---
+description: verbs-quest deployment, hosting, and git identity
+alwaysApply: true
+---
+
+# verbs-quest — deployment & repo notes
+
+## Git identity (local repo only)
+
+- `user.name`: Jorge Martí
+- `user.email`: jormarma@gmail.com
+
+## Vite / asset paths
+
+- Production `base` must be `/` for Cloudflare Pages at `https://verbs-quest.pages.dev/`.
+- Old broken builds used `base: '/verbs-quest/'` and title `temp-app`; assets 404 and return `index.html` as `text/html` → MIME errors in console.
+- Build output: `dist/` (gitignored). `docs/` is committed for GitHub Pages.
+
+## Hosting (two separate targets)
+
+| Target | URL | Status |
+|--------|-----|--------|
+| Cloudflare Pages | `verbs-quest.pages.dev` | Needs explicit Wrangler deploy or CF dashboard build config |
+| GitHub Pages | `jormarma.github.io/verbs-quest/` | Auto-deploys from `/docs` on `main` via `pages build and deployment` |
+
+Cloudflare is **not** auto-deploying from git pushes (no Cloudflare checks on commits). GitHub Pages **is** connected.
+
+## Deploy to Cloudflare Pages
+
+```bash
+npx wrangler login
+pnpm deploy:cloudflare
+```
+
+Or set GitHub secrets `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` and run the manual workflow `.github/workflows/cloudflare-pages.yml`.
+
+Dashboard settings (if using git builds): build `pnpm build:prod`, output `dist`, Node 20.
+
+## Production env
+
+- `.env.production` (committed): `VITE_SPACETIMEDB_URI`, `VITE_SPACETIMEDB_DB`
+- SPA routing: `public/_redirects` → `/* /index.html 200`
+- `wrangler.toml`: `pages_build_output_dir = "./dist"`
