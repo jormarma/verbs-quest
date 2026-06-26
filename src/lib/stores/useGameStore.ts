@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { submitLevelAttempt } from '../utils/sync'
+import { shouldSubmitLevelAttempt, type GameMode } from '../game/gameMode'
 
 export type GameStatus = "IDLE" | "PLAYING" | "PAUSED" | "FINISHED"
 export type SubmissionStatus = "unlocked" | "maintained" | "downgraded" | "rejected" | null
@@ -31,6 +32,7 @@ export interface GameState {
     session: {
         level: number
         status: GameStatus
+        gameMode: GameMode
         startTime: number | null
         endTime: number | null
         config: {
@@ -57,7 +59,7 @@ export interface GameState {
         level: number,
         questions: VerbQuestion[],
         delayTimer?: boolean,
-        options?: { timeLimitSeconds?: number }
+        options?: { timeLimitSeconds?: number; gameMode?: GameMode }
     ) => void
     startLevelTimer: () => void
     submitAnswer: (answer: string) => void
@@ -75,6 +77,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     session: {
         level: 1,
         status: "IDLE",
+        gameMode: "quest",
         startTime: null,
         endTime: null,
         config: {
@@ -101,12 +104,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         const resolvedTimeLimit = typeof candidateTimeLimit === 'number' && Number.isFinite(candidateTimeLimit)
             ? Math.max(1, Math.floor(candidateTimeLimit))
             : 180
+        const gameMode = options?.gameMode ?? 'quest'
+        const useCountdown = delayTimer && gameMode === 'quest'
 
         return set({
             session: {
                 level,
                 status: "PLAYING",
-                startTime: delayTimer ? null : Date.now(),
+                gameMode,
+                startTime: useCountdown ? null : Date.now(),
                 endTime: null,
                 config: {
                     timeLimit: resolvedTimeLimit,
@@ -187,7 +193,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         const totalQuestions = state.gameplay.mainQueue.length + state.gameplay.retryQueue.length
         const isFinished = nextIndex >= totalQuestions
 
-        if (isFinished && state.session.startTime) {
+        if (
+            isFinished
+            && state.session.startTime
+            && shouldSubmitLevelAttempt(state.session.gameMode)
+        ) {
             // Fire and forget the sync submission
             submitLevelAttempt({
                 levelId: state.session.level,
@@ -245,6 +255,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         session: {
             level: 1,
             status: "IDLE",
+            gameMode: "quest",
             startTime: null,
             endTime: null,
             config: { timeLimit: 180, baseQuestionCount: 5 }
@@ -265,7 +276,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
     cancelGame: () => set((state) => ({
-        session: { ...state.session, status: "IDLE", startTime: null, endTime: null },
+        session: {
+            ...state.session,
+            status: "IDLE",
+            gameMode: "quest",
+            startTime: null,
+            endTime: null,
+        },
         gameplay: {
             currentQuestionIndex: 0,
             mainQueue: [],
@@ -289,7 +306,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         const state = get()
         if (state.session.status !== "PLAYING") return
 
-        if (state.session.startTime) {
+        if (state.session.startTime && shouldSubmitLevelAttempt(state.session.gameMode)) {
             // Wait for DB failure sync to complete before allowing user to click Continue
             await submitLevelAttempt({
                 levelId: state.session.level,

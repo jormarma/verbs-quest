@@ -145,6 +145,10 @@ export const en: TranslationDict = {
     "review.title": "Review mistakes",
     "review.your_answer": "You typed:",
     "review.correct": "Correct:",
+    "practice.badge": "Practice",
+    "practice.start": "Practice level {level}",
+    "practice.complete": "Practice complete!",
+    "practice.perfect": "Perfect practice run — no errors!",
     "update.available": "New version available",
     "update.action": "Update Now"
 }
@@ -290,6 +294,10 @@ export const es: TranslationDict = {
     "review.title": "Revisa los errores",
     "review.your_answer": "Escribiste:",
     "review.correct": "Correcto:",
+    "practice.badge": "Práctica",
+    "practice.start": "Practicar nivel {level}",
+    "practice.complete": "¡Práctica completada!",
+    "practice.perfect": "¡Práctica perfecta — sin errores!",
     "update.available": "Nueva versión disponible",
     "update.action": "Actualizar Ahora"
 }

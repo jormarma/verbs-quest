@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../lib/stores/useGameStore'
+import { shouldRunLevelTimer } from '../../lib/game/gameMode'
 import { Clock } from 'lucide-react'
 import { cn } from '../../lib/utils/cn'
 import { useTranslation } from '../../lib/hooks/useTranslation'
@@ -10,7 +11,7 @@ export function Timer() {
     const [timeLeft, setTimeLeft] = useState(session.config.timeLimit)
 
     useEffect(() => {
-        if (session.status !== 'PLAYING' || !session.startTime) return
+        if (session.status !== 'PLAYING' || !session.startTime || !shouldRunLevelTimer(session.gameMode)) return
 
         const interval = setInterval(() => {
             const elapsed = Math.floor((Date.now() - session.startTime!) / 1000)
@@ -25,7 +26,7 @@ export function Timer() {
         }, 1000)
 
         return () => clearInterval(interval)
-    }, [session.status, session.startTime, session.config.timeLimit])
+    }, [session.status, session.startTime, session.config.timeLimit, session.gameMode])
 
     // Formatting MM:SS
     const minutes = Math.floor(timeLeft / 60)

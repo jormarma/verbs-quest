@@ -6,7 +6,7 @@ import { Scene } from './components/3d/Scene'
 import { VirtualKeyboard } from './components/game/VirtualKeyboard'
 import { Timer } from './components/game/Timer'
 import { Button } from './components/ui/Button'
-import { LogOut, BookOpen, Swords, Play, Trophy, ArrowLeft } from 'lucide-react'
+import { LogOut, BookOpen, Swords, Play, Trophy, ArrowLeft, GraduationCap } from 'lucide-react'
 import { cn } from './lib/utils/cn'
 
 import { useVerbs } from './lib/hooks/useVerbs'
@@ -22,6 +22,7 @@ import { LanguageSwitcher } from './components/ui/LanguageSwitcher'
 import { UpdateBanner } from './components/ui/UpdateBanner'
 import { RunReviewPanel } from './components/game/RunReviewPanel'
 import { getRunReviewItems } from './lib/game/runReview'
+import { isPracticeMode } from './lib/game/gameMode'
 
 function GameBoard() {
   const { session, gameplay, startGame, startLevelTimer, cancelGame, resetGame } = useGameStore()
@@ -108,8 +109,15 @@ function GameBoard() {
   }
 
   const handleStartQuest = () => {
-    startGame(levelToPlay, questions, true, { timeLimitSeconds: settings.timeLimitSeconds })
+    startGame(levelToPlay, questions, true, {
+      timeLimitSeconds: settings.timeLimitSeconds,
+      gameMode: 'quest',
+    })
     setCountdown(3)
+  }
+
+  const handleStartPractice = () => {
+    startGame(levelToPlay, questions, false, { gameMode: 'practice' })
   }
 
   // Admin Override Route
@@ -132,12 +140,17 @@ function GameBoard() {
       ? gameplay.mainQueue[gameplay.currentQuestionIndex]
       : gameplay.retryQueue[gameplay.currentQuestionIndex - gameplay.mainQueue.length]
   ) : null
-  const hasServerSubmission = gameplay.submissionStatus !== null
+  const isPracticeRun = isPracticeMode(session.gameMode)
+  const hasServerSubmission = !isPracticeRun && gameplay.submissionStatus !== null
   const isServerPerfect = gameplay.submissionStatus === 'unlocked'
-  const isFailedRun = hasServerSubmission
-    ? (gameplay.submissionStatus === 'downgraded' || gameplay.submissionStatus === 'rejected')
-    : gameplay.errorsInLevel >= 100
-  const isPerfectRun = hasServerSubmission ? isServerPerfect : gameplay.errorsInLevel === 0
+  const isFailedRun = isPracticeRun
+    ? false
+    : hasServerSubmission
+      ? (gameplay.submissionStatus === 'downgraded' || gameplay.submissionStatus === 'rejected')
+      : gameplay.errorsInLevel >= 100
+  const isPerfectRun = isPracticeRun
+    ? gameplay.errorsInLevel === 0
+    : hasServerSubmission ? isServerPerfect : gameplay.errorsInLevel === 0
   const isLastPlayableLevel = totalLevels > 0 ? session.level >= totalLevels : false
   const unlockedByThisRun = hasServerSubmission
     ? (gameplay.submissionStatus === 'unlocked' && gameplay.submissionNewLevel === session.level + 1)
@@ -207,11 +220,13 @@ function GameBoard() {
 
             {/* Right Side: Swap Timer vs Controls */}
             <div className="flex items-center gap-2">
-              {session.status === 'PLAYING' && countdown === null ? (
-                // During gameplay: Show Timer
+              {session.status === 'PLAYING' && countdown === null && !isPracticeRun ? (
                 <Timer />
+              ) : session.status === 'PLAYING' && countdown === null && isPracticeRun ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-900/40 border border-emerald-600/50 text-emerald-200 text-sm font-bold uppercase tracking-wider">
+                  {t('practice.badge')}
+                </div>
               ) : (
-                // In lobby/menus: Show Controls
                 <>
                   <LanguageSwitcher />
 
@@ -316,22 +331,33 @@ function GameBoard() {
                   </div>
 
                   <div className="w-full flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-                    <div className="w-full max-w-md flex items-center justify-center gap-3">
+                    <div className="w-full max-w-md flex flex-col items-center gap-3">
+                      <div className="w-full flex items-center gap-3">
+                        <Button
+                          variant="destructive"
+                          className="h-12 sm:h-14 flex-1 font-bold text-base sm:text-lg"
+                          onClick={() => setLobbyView('menu')}
+                        >
+                          <ArrowLeft className="w-4 h-4 mr-1" />
+                          {t('home.back')}
+                        </Button>
+                        <Button
+                          variant="default"
+                          disabled={isLoading || questions.length === 0}
+                          className="h-12 sm:h-14 flex-1 font-bold text-base sm:text-lg"
+                          onClick={handleStartQuest}
+                        >
+                          {isLoading ? t('quest.loading') : t('quest.start')}
+                        </Button>
+                      </div>
                       <Button
-                        variant="destructive"
-                        className="h-12 sm:h-14 flex-1 font-bold text-base sm:text-lg"
-                        onClick={() => setLobbyView('menu')}
-                      >
-                        <ArrowLeft className="w-4 h-4 mr-1" />
-                        {t('home.back')}
-                      </Button>
-                      <Button
-                        variant="default"
+                        variant="outline"
                         disabled={isLoading || questions.length === 0}
-                        className="h-12 sm:h-14 flex-1 font-bold text-base sm:text-lg"
-                        onClick={handleStartQuest}
+                        className="w-full h-12 sm:h-14 font-bold text-base sm:text-lg border-emerald-600/50 text-emerald-300 hover:bg-emerald-950/40"
+                        onClick={handleStartPractice}
                       >
-                        {isLoading ? t('quest.loading') : t('quest.start')}
+                        <GraduationCap className="w-4 h-4 mr-2" />
+                        {isLoading ? t('quest.loading') : t('practice.start', { level: levelToPlay })}
                       </Button>
                     </div>
                   </div>
@@ -458,7 +484,11 @@ function GameBoard() {
 
           {session.status === 'FINISHED' && (
             <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 duration-700 w-full">
-              {isPerfectRun && isLastPlayableLevel ? (
+              {isPracticeRun ? (
+                <h2 className="text-4xl md:text-5xl text-center font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)] leading-tight">
+                  {t('practice.complete')}
+                </h2>
+              ) : isPerfectRun && isLastPlayableLevel ? (
                 <div className="flex flex-col items-center animate-bounce">
                   <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-emerald-400 to-yellow-300 drop-shadow-[0_0_15px_rgba(252,211,77,0.8)]">
                     {t('quest.incredible')}
@@ -472,7 +502,13 @@ function GameBoard() {
               )}
 
               <div className="bg-slate-800/80 p-4 md:p-6 rounded-2xl border border-slate-700 shadow-xl text-center space-y-2 max-w-lg w-full">
-                {isPerfectRun ? (
+                {isPracticeRun ? (
+                  isPerfectRun ? (
+                    <p className="text-lg md:text-xl text-emerald-300 font-semibold">{t('practice.perfect')}</p>
+                  ) : (
+                    <p className="text-lg md:text-xl text-slate-300">{t('quest.errors_made', { count: gameplay.errorsInLevel })}</p>
+                  )
+                ) : isPerfectRun ? (
                   isLastPlayableLevel ? (
                     <p className="text-xl md:text-2xl text-yellow-300 font-bold">{t('quest.perfect_master')}</p>
                   ) : unlockedByThisRun ? (
@@ -502,7 +538,7 @@ function GameBoard() {
               )}
 
               {/* Leaderboard Section */}
-              {!isFailedRun && (
+              {!isFailedRun && !isPracticeRun && (
                 <div className="w-full max-w-lg bg-slate-900/60 backdrop-blur border border-slate-700 p-4 md:p-6 rounded-2xl shadow-xl mt-2 md:mt-4">
                   <h3 className="text-xl md:text-2xl font-black text-emerald-400 mb-3 md:mb-4 text-center uppercase tracking-widest drop-shadow-sm border-b border-slate-700/50 pb-2">{t('leaderboard.top3')}</h3>
                   {gameplay.topScores.length === 0 ? (
