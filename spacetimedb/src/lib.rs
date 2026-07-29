@@ -931,7 +931,9 @@ fn parse_iso_to_timestamp(s: &str) -> Result<Timestamp, String> {
     let bytes = s.as_bytes();
     let check = |i: usize, c: &u8| match i {
         0 | 1 | 2 | 3 | 5 | 6 | 8 | 9 | 11 | 12 | 14 | 15 | 17 | 18 => c.is_ascii_digit(),
-        4 | 7 | 13 | 16 => matches!(c, b'-' | b'T' | b':'),
+        4 | 7 => *c == b'-',
+        10 => matches!(c, b'T' | b' '),
+        13 | 16 => *c == b':',
         _ => false,
     };
     if !(0..19).all(|i| check(i, &bytes[i])) {
@@ -953,7 +955,7 @@ fn parse_iso_to_timestamp(s: &str) -> Result<Timestamp, String> {
     }
 
     let days_from_epoch = days_from_civil(year, month as i32, day as i32);
-    let seconds_in_day = hour as i64 * 3600 + minute as i64 + second as i64;
+    let seconds_in_day = hour as i64 * 3600 + minute as i64 * 60 + second as i64;
     let epoch_seconds = days_from_epoch * 86_400 + seconds_in_day - tz_offset;
     let epoch_micros = epoch_seconds * 1_000_000 + frac_micros as i64;
     let epoch_micros = if epoch_micros < 0 { 0 } else { epoch_micros };
@@ -1059,5 +1061,43 @@ mod tests {
             r#"{{"iss":"https://evil.example.com","sub":"1","aud":"{client_id}"}}"#
         ));
         assert!(validate_google_claims(wrong_iss.jwt().unwrap(), client_id).is_err());
+    }
+
+    #[test]
+    fn parse_iso_to_timestamp_accepts_valid_forms_rejects_invalid_and_computes_duration() {
+        let valid = [
+            "2026-07-29T10:00:00.000Z", // new Date().toISOString()
+            "2026-07-29T10:00:00Z",
+            "2026-07-29T10:00:00+02:00",
+            "2026-07-29 10:00:00Z",
+        ];
+        for s in valid {
+            assert!(
+                parse_iso_to_timestamp(s).is_ok(),
+                "expected Ok for {s}"
+            );
+        }
+
+        let invalid = [
+            "",
+            "not-a-timestamp",
+            "2026-07-29",
+            "2026-07-29T10:00",
+            "2026/07/29T10:00:00Z",
+            "2026-07-29T10:00:00X",
+        ];
+        for s in invalid {
+            assert!(
+                parse_iso_to_timestamp(s).is_err(),
+                "expected Err for {s}"
+            );
+        }
+
+        let start = parse_iso_to_timestamp("2026-07-29T10:00:00Z").expect("start");
+        let end = parse_iso_to_timestamp("2026-07-29T10:02:30Z").expect("end");
+        let duration_seconds = (end.to_micros_since_unix_epoch()
+            - start.to_micros_since_unix_epoch())
+            / 1_000_000;
+        assert_eq!(duration_seconds, 150);
     }
 }
