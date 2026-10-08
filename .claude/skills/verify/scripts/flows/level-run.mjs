@@ -29,10 +29,12 @@ const lessonLine = [...new Set(verbs.map((verb) => verb.infinitive))]
   .join(', ')
   .toUpperCase()
 
-const sessionColumns = 'id, level_attempted, errors_count, is_perfect_run, duration_seconds'
+const sessionColumns = 'id, user_identity, level_attempted, errors_count, is_perfect_run, duration_seconds'
 const attemptQuery = 'SELECT last_status, last_new_level FROM user_attempt'
+const capQuery = 'SELECT current_level_cap FROM user'
 const sessionsBefore = sqlRows(run, `SELECT ${sessionColumns} FROM game_session`)
 const attemptBefore = sqlRows(run, attemptQuery)
+const capBefore = Number(sqlRows(run, capQuery)[0]?.current_level_cap)
 const beforeIds = new Set(sessionsBefore.map((row) => row.id))
 
 const assertions = []
@@ -79,6 +81,22 @@ async function waitForSubmission(expectedCount) {
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return sqlRows(run, `SELECT ${sessionColumns} FROM game_session`)
+}
+
+const formatTime = (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+
+async function waitForTopTimes(page) {
+  let shown = []
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    shown = await page.evaluate(() => {
+      const heading = [...document.querySelectorAll('h3')].find((h) => h.textContent.trim() === 'Top 3 Times')
+      if (!heading) return []
+      return [...heading.parentElement.querySelectorAll('li span.font-mono')].map((span) => span.textContent.trim())
+    })
+    if (shown.length > 0) break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return shown
 }
 
 let page = null
@@ -173,6 +191,7 @@ async function main() {
   const newSessions = sessionsAfter.filter((row) => !beforeIds.has(row.id))
   const attemptAfter = sqlRows(run, attemptQuery)
 
+  const shownTimes = mode === 'quest' ? await waitForTopTimes(page) : []
   await page.waitForTimeout(500)
   await page.screenshot({ path: evidencePath(run, 'screens', `${mode}-finished-level${level}-wrong${wrongTarget}.png`) })
   const bodyText = await page.locator('body').innerText()
@@ -198,41 +217,44 @@ async function main() {
       attemptAfter[0]?.last_status === expectedStatus,
       `user_attempt.last_status ${attemptAfter[0]?.last_status}, expected ${expectedStatus}`,
     )
-    record(
-      'screen shows the error count',
-      bodyText.includes(`Errors made: ${errorCount}`),
-      `Errors made: ${errorCount}`,
-    )
     if (errorCount > 0) {
+      record(
+        'screen shows the error count',
+        bodyText.includes(`Errors made: ${errorCount}`),
+        `Errors made: ${errorCount}`,
+      )
       record(
         'screen explains that a perfect run is needed',
         bodyText.includes('need a perfect run'),
         'Good job, but you need a perfect run to unlock the next level.',
       )
+    } else {
+      const lastNewLevel = Number(attemptAfter[0]?.last_new_level)
+      const raisedCap = lastNewLevel > capBefore
+      const expectedMessage = raisedCap ? 'Level unlocked' : 'Perfect run!'
+      const shownLine = bodyText.match(/(Perfect run|Level unlocked)[^\n]*/)?.[0] ?? 'no perfect-run message on screen'
+      record(
+        `perfect run shows "${expectedMessage}"`,
+        bodyText.includes(expectedMessage),
+        `${shownLine} (server cap ${capBefore} to ${lastNewLevel})`,
+      )
     }
+    const callerIdentity = newSessions[0]?.user_identity
+    const expectedTimes = sessionsAfter
+      .filter((row) => row.user_identity === callerIdentity && row.level_attempted === level)
+      .sort((a, b) => a.duration_seconds - b.duration_seconds)
+      .slice(0, 3)
+      .map((row) => formatTime(row.duration_seconds))
+    record(
+      'TOP 3 TIMES lists the saved runs',
+      JSON.stringify(shownTimes) === JSON.stringify(expectedTimes),
+      `shows ${shownTimes.join(', ') || 'nothing'}, expected ${expectedTimes.join(', ')}`,
+    )
   } else {
     record('practice writes no game_session row', newSessions.length === 0, `${newSessions.length} new row(s)`)
     const practiceMessage = errorCount === 0 ? 'Perfect practice run' : `Errors made: ${errorCount}`
     record('screen shows the practice result', bodyText.includes(practiceMessage), practiceMessage)
   }
-
-  const knownIssues = []
-  if (mode === 'quest' && errorCount === 0 && !/Perfect run!/.test(bodyText)) {
-    const needPerfect = 'Good job, but you need a perfect run to unlock the next level.'
-    knownIssues.push({
-      id: 'perfect-run-message',
-      observed: bodyText.includes(needPerfect) ? needPerfect : 'no perfect-run message',
-      reference: 'src/lib/utils/sync.ts reads user_attempt, which no subscription fills',
-    })
-  }
-  if (mode === 'quest' && /TOP 3 TIMES/i.test(bodyText) && /Loading\.\.\./.test(bodyText)) {
-    knownIssues.push({
-      id: 'top-3-times-loading',
-      observed: 'Top 3 Times stays on Loading...',
-      reference: 'src/lib/utils/sync.ts reads game_session, which no subscription fills',
-    })
-  }
-  for (const issue of knownIssues) console.log(`NOTE  known issue ${issue.id}: ${issue.observed}`)
 
   const attemptChanged = JSON.stringify(attemptAfter) !== JSON.stringify(attemptBefore)
   if (mode === 'practice') {
@@ -251,7 +273,6 @@ async function main() {
     newSessions,
     attemptBefore,
     attemptAfter,
-    knownIssues,
     assertions,
   }
 }
