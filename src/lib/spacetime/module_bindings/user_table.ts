@@ -14,7 +14,6 @@ export default __t.row({
   identity: __t.identity().primaryKey(),
   usernameLower: __t.string().name("username_lower"),
   username: __t.string(),
-  passwordHash: __t.string().name("password_hash"),
   role: __t.string(),
   currentLevelCap: __t.u32().name("current_level_cap"),
   createdAt: __t.timestamp().name("created_at"),

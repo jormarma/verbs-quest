@@ -36,6 +36,12 @@ Or set GitHub secrets `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` and run t
 
 Dashboard settings (if using git builds): build `pnpm build:prod`, output `dist`, Node 20.
 
+## Toolchain
+
+- SpacetimeDB 2.11 (CLI, `spacetimedb` npm, Rust crate); crate requires rustc ≥ 1.96.
+- TypeScript runs side-by-side: `typescript` is aliased to `@typescript/typescript6` (API for typescript-eslint), `@typescript/native` is TS 7 and provides `tsc`.
+- Auth is Google-only; the publishing CLI identity is seeded as admin by `init`.
+
 ## Production env
 
 - `.env.production` (committed): `VITE_SPACETIMEDB_URI`, `VITE_SPACETIMEDB_DB`

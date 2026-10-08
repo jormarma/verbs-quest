@@ -3,54 +3,14 @@
 // Schema mirrors the original Supabase schema (verbs, users, game_sessions,
 // app_settings) plus the procedural RPC logic (submit_level_attempt, admin
 // overview, category switching, settings updates). Auth is identity-based:
-// each connection's `ctx.sender()` is the canonical user identifier. Usernames
-// are unique globally; passwords are stored as argon2 hashes for forward
-// compatibility (cross-device login via login_user reducer).
+// each connection's `ctx.sender()` is the canonical user identifier. Players
+// sign in exclusively with Google (OIDC); the only non-Google identity is the
+// database owner, seeded as admin in `init` so CLI tooling can manage verbs.
 
-use argon2::{
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
-use rand::RngCore;
 use spacetimedb::{
     procedure, reducer, table, Identity, JwtClaims, ProcedureContext, ReducerContext,
     SpacetimeType, Table, Timestamp,
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Password hashing helpers
-//
-// SpacetimeDB disallows `getrandom` (the default randomness source for `rand`)
-// in module code. We instead pull bytes from `ctx.rng()` (which is exposed by
-// the runtime as deterministic-per-reducer randomness), hex-encode them into
-// the salt string, and feed them to argon2.
-// ─────────────────────────────────────────────────────────────────────────────
-
-fn hash_password_with_rng<R: RngCore>(
-    rng: &mut R,
-    password: &str,
-) -> Result<String, String> {
-    let mut salt_bytes = [0u8; 16];
-    rng.fill_bytes(&mut salt_bytes);
-    let salt_str = hex::encode(salt_bytes);
-    let salt = SaltString::from_b64(&salt_str).map_err(|e| format!("Invalid salt: {e}"))?;
-    let argon2 = Argon2::default();
-    let hash = argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| format!("Failed to hash password: {e}"))?
-        .to_string();
-    Ok(hash)
-}
-
-fn verify_password(password: &str, hash: &str) -> bool {
-    let parsed = match PasswordHash::new(hash) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed)
-        .is_ok()
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tables
@@ -63,7 +23,6 @@ pub struct User {
     #[unique]
     pub username_lower: String,
     pub username: String,
-    pub password_hash: String,
     pub role: String, // "student" | "admin"
     pub current_level_cap: u32,
     pub created_at: Timestamp,
@@ -174,7 +133,24 @@ pub fn init(ctx: &ReducerContext) {
             updated_by: ctx.sender(),
         });
     }
+
+    // `init` runs as the database owner (the publishing CLI identity). Seeding
+    // it as admin lets `spacetime call` tooling (verb import, smoke checks)
+    // manage the module without any password-based login.
+    if ctx.db.user().identity().find(ctx.sender()).is_none() {
+        ctx.db.user().insert(User {
+            identity: ctx.sender(),
+            username_lower: OWNER_USERNAME.to_lowercase(),
+            username: OWNER_USERNAME.into(),
+            role: "admin".into(),
+            current_level_cap: ADMIN_LEVEL_CAP,
+            created_at: ctx.timestamp,
+        });
+    }
 }
+
+const OWNER_USERNAME: &str = "admin";
+const ADMIN_LEVEL_CAP: u32 = 18;
 
 #[reducer(client_connected)]
 pub fn on_connect(_ctx: &ReducerContext) {}
@@ -188,7 +164,6 @@ pub fn on_disconnect(_ctx: &ReducerContext) {}
 
 const USERNAME_MIN: usize = 3;
 const USERNAME_MAX: usize = 12;
-const PASSWORD_MIN: usize = 6;
 
 fn is_valid_username(s: &str) -> bool {
     !s.is_empty()
@@ -196,110 +171,6 @@ fn is_valid_username(s: &str) -> bool {
         && s.len() <= USERNAME_MAX
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_')
-}
-
-#[reducer]
-pub fn register_user(
-    ctx: &ReducerContext,
-    username: String,
-    password: String,
-) -> Result<(), String> {
-    if ctx.db.user().identity().find(ctx.sender()).is_some() {
-        return Err("Profile already exists for this identity".into());
-    }
-
-    if !is_valid_username(&username) {
-        return Err(format!(
-            "Username must be {}-{} chars, alphanumeric or underscore",
-            USERNAME_MIN, USERNAME_MAX
-        ));
-    }
-    if password.len() < PASSWORD_MIN {
-        return Err(format!("Password must be at least {} characters", PASSWORD_MIN));
-    }
-
-    let lower = username.to_lowercase();
-    if ctx.db.user().username_lower().find(&lower).is_some() {
-        return Err("Username is already taken".into());
-    }
-
-    let mut rng = ctx.rng();
-    let hash = hash_password_with_rng(&mut rng, &password)?;
-    ctx.db.user().insert(User {
-        identity: ctx.sender(),
-        username_lower: lower,
-        username,
-        password_hash: hash,
-        role: "student".into(),
-        current_level_cap: 1,
-        created_at: ctx.timestamp,
-    });
-    Ok(())
-}
-
-#[reducer]
-pub fn login_user(
-    ctx: &ReducerContext,
-    username: String,
-    password: String,
-) -> Result<(), String> {
-    if ctx.db.user().identity().find(ctx.sender()).is_some() {
-        return Err("This device already has a profile. Sign out first.".into());
-    }
-
-    let lower = username.to_lowercase();
-    let existing = ctx
-        .db
-        .user()
-        .username_lower()
-        .find(&lower)
-        .ok_or_else(|| "Username not found".to_string())?;
-
-    if !verify_password(&password, &existing.password_hash) {
-        return Err("Invalid password".into());
-    }
-
-    migrate_user_to_identity(ctx, existing, ctx.sender())
-}
-
-fn migrate_user_to_identity(
-    ctx: &ReducerContext,
-    mut user: User,
-    new_identity: Identity,
-) -> Result<(), String> {
-    let old_identity = user.identity;
-    if old_identity == new_identity {
-        return Ok(());
-    }
-
-    let sessions: Vec<GameSession> = ctx
-        .db
-        .game_session()
-        .iter()
-        .filter(|session| session.user_identity == old_identity)
-        .collect();
-
-    for session in sessions {
-        ctx.db.game_session().id().update(GameSession {
-            user_identity: new_identity,
-            ..session
-        });
-    }
-
-    if let Some(attempt) = ctx.db.user_attempt().identity().find(old_identity) {
-        ctx.db.user_attempt().identity().delete(old_identity);
-        ctx.db.user_attempt().insert(UserAttempt {
-            identity: new_identity,
-            last_status: attempt.last_status,
-            last_new_level: attempt.last_new_level,
-            last_completed_at: attempt.last_completed_at,
-        });
-    }
-
-    ctx.db.user().identity().delete(old_identity);
-    user.identity = new_identity;
-    ctx.db.user().insert(user);
-    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -361,12 +232,10 @@ pub fn register_google_user(ctx: &ReducerContext, username: String) -> Result<()
         return Err("Username is already taken".into());
     }
 
-    // Google handles authentication, so no password is stored for these users.
     ctx.db.user().insert(User {
         identity: ctx.sender(),
         username_lower: lower,
         username,
-        password_hash: String::new(),
         role: "student".into(),
         current_level_cap: 1,
         created_at: ctx.timestamp,
@@ -375,66 +244,17 @@ pub fn register_google_user(ctx: &ReducerContext, username: String) -> Result<()
 }
 
 #[reducer]
-pub fn register_admin(
-    ctx: &ReducerContext,
-    username: String,
-    password: String,
-) -> Result<(), String> {
-    if ctx.db.user().identity().find(ctx.sender()).is_some() {
-        return Err("Profile already exists for this identity".into());
-    }
-    // Admin registration is allowed only when no admin exists yet, to avoid
-    // privilege escalation. After that, promote via promote_to_admin reducer.
-    if ctx.db.user().iter().any(|u| u.role == "admin") {
-        return Err("An admin already exists. Use promote_to_admin.".into());
-    }
-
-    if !is_valid_username(&username) {
-        return Err("Invalid username".into());
-    }
-    if password.len() < PASSWORD_MIN {
-        return Err("Password too short".into());
-    }
-
-    let lower = username.to_lowercase();
-    if ctx.db.user().username_lower().find(&lower).is_some() {
-        return Err("Username is already taken".into());
-    }
-
-    let mut rng = ctx.rng();
-    let hash = hash_password_with_rng(&mut rng, &password)?;
-    ctx.db.user().insert(User {
-        identity: ctx.sender(),
-        username_lower: lower,
-        username,
-        password_hash: hash,
-        role: "admin".into(),
-        current_level_cap: 18,
-        created_at: ctx.timestamp,
-    });
-    Ok(())
-}
-
-#[reducer]
-pub fn promote_to_admin(ctx: &ReducerContext, target: Identity) -> Result<(), String> {
-    let me = ctx
-        .db
-        .user()
-        .identity()
-        .find(ctx.sender())
-        .ok_or_else(|| "Not authenticated".to_string())?;
-    if me.role != "admin" {
-        return Err("Only admins can promote users".into());
-    }
+pub fn promote_to_admin(ctx: &ReducerContext, username: String) -> Result<(), String> {
+    require_admin(ctx)?;
     let target_user = ctx
         .db
         .user()
-        .identity()
-        .find(target)
+        .username_lower()
+        .find(username.to_lowercase())
         .ok_or_else(|| "Target user not found".to_string())?;
     ctx.db.user().identity().update(User {
         role: "admin".into(),
-        current_level_cap: 18,
+        current_level_cap: ADMIN_LEVEL_CAP,
         ..target_user
     });
     Ok(())
@@ -1019,22 +839,12 @@ fn days_from_civil(y: i32, m: i32, d: i32) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
 
     #[test]
     fn is_valid_username_accepts_alphanumeric_underscore() {
         assert!(is_valid_username("player_1"));
         assert!(!is_valid_username("ab"));
         assert!(!is_valid_username("bad name"));
-    }
-
-    #[test]
-    fn verify_password_accepts_matching_hash() {
-        let mut rng = StdRng::seed_from_u64(42);
-        let hash = hash_password_with_rng(&mut rng, "secret12").expect("hash");
-        assert!(verify_password("secret12", &hash));
-        assert!(!verify_password("wrong", &hash));
     }
 
     #[test]

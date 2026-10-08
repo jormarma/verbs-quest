@@ -64,7 +64,6 @@ export const User = __t.object("User", {
   identity: __t.identity(),
   usernameLower: __t.string(),
   username: __t.string(),
-  passwordHash: __t.string(),
   role: __t.string(),
   currentLevelCap: __t.u32(),
   createdAt: __t.timestamp(),

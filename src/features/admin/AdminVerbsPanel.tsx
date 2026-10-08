@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, AlertCircle, ListChecks } from 'lucide-react'
 import { useTable } from 'spacetimedb/react'
 import { tables } from '../../lib/spacetime/module_bindings'
@@ -46,22 +46,24 @@ function emptyStatsMap(): Record<VerbCategory, CategoryStats> {
 
 export function AdminVerbsPanel() {
     const { t } = useTranslation()
-    const [settingsRows] = useTable(tables.app_setting)
-    const [verbs] = useTable(tables.verb)
+    const [settingsRows, settingsReady] = useTable(tables.app_setting)
+    const [verbs, verbsReady] = useTable(tables.verb)
 
-    const [selectedCategory, setSelectedCategory] = useState<VerbCategory>(1)
-    const [initialCategory, setInitialCategory] = useState<VerbCategory>(1)
-    const [statsByCategory, setStatsByCategory] = useState<Record<VerbCategory, CategoryStats>>(emptyStatsMap)
+    const initialCategory = normalizeCategory(settingsRows.find((r) => r.id === 1)?.activeVerbCategory)
+    const [selectedCategory, setSelectedCategory] = useState<VerbCategory>(initialCategory)
+    const [syncedCategory, setSyncedCategory] = useState<VerbCategory>(initialCategory)
+    if (syncedCategory !== initialCategory) {
+        setSyncedCategory(initialCategory)
+        setSelectedCategory(initialCategory)
+    }
 
-    const [isLoading, setIsLoading] = useState(true)
+    const isLoading = !settingsReady || !verbsReady
     const [isSaving, setIsSaving] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [isSuccessFading, setIsSuccessFading] = useState(false)
 
-    const recompute = useCallback(() => {
-        const row = settingsRows.find((r) => r.id === 1)
-        const nextInitialCategory = normalizeCategory(row?.activeVerbCategory)
+    const statsByCategory = useMemo(() => {
         const nextStats = emptyStatsMap()
         const levelsByCategory: Record<VerbCategory, Set<number>> = {
             1: new Set<number>(),
@@ -79,23 +81,11 @@ export function AdminVerbsPanel() {
         nextStats[1].totalLevels = levelsByCategory[1].size
         nextStats[2].totalLevels = levelsByCategory[2].size
         nextStats[3].totalLevels = levelsByCategory[3].size
-        setInitialCategory(nextInitialCategory)
-        setSelectedCategory(nextInitialCategory)
-        setStatsByCategory(nextStats)
-        setIsLoading(false)
-    }, [settingsRows, verbs])
+        return nextStats
+    }, [verbs])
 
     useEffect(() => {
-        recompute()
-    }, [recompute])
-
-    useEffect(() => {
-        if (!successMessage) {
-            setIsSuccessFading(false)
-            return
-        }
-
-        setIsSuccessFading(false)
+        if (!successMessage) return
 
         const fadeTimer = window.setTimeout(() => {
             setIsSuccessFading(true)
@@ -142,7 +132,6 @@ export function AdminVerbsPanel() {
                     ? t('admin.verbs.saved_successfully_clamped', { count: clamped })
                     : t('admin.verbs.saved_successfully'),
             )
-            recompute()
         } catch (err) {
             const message = err instanceof Error ? err.message : t('admin.verbs.save_error')
             setErrorMessage(message)

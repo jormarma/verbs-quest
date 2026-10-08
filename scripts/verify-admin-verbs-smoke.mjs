@@ -199,20 +199,13 @@ function main() {
     }
   }
 
-  // 3. Find an admin and a student to drive the rest of the checks.
-  // (SpacetimeDB SQL doesn't support ORDER BY — just take any matching row.)
+  // 3. The publishing identity is seeded as admin by the module's `init`.
   const adminIdentity = runSql(
     server,
     db,
     "SELECT identity FROM user WHERE role = 'admin' LIMIT 1;",
   )
-  const studentIdentity = runSql(
-    server,
-    db,
-    "SELECT identity FROM user WHERE role = 'student' LIMIT 1;",
-  )
   assert(adminIdentity, 'No admin user found')
-  assert(studentIdentity, 'No student user found')
 
   // 4. Admin can update app settings; non-admin cannot.
   runCall(

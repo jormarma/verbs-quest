@@ -27,32 +27,27 @@ export function AdminSettingsPanel() {
     const [timeLimitInput, setTimeLimitInput] = useState<string>(String(DEFAULT_SETTINGS.timeLimitSeconds))
     const [verbsPerLevelInput, setVerbsPerLevelInput] = useState<string>(String(DEFAULT_SETTINGS.verbsPerLevel))
     const [initialSettings, setInitialSettings] = useState<SettingsSnapshot>(DEFAULT_SETTINGS)
-    const [isLoading, setIsLoading] = useState(true)
+    const [syncedRowKey, setSyncedRowKey] = useState<string | null>(null)
     const [isSaving, setIsSaving] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [isSuccessFading, setIsSuccessFading] = useState(false)
 
-    useEffect(() => {
-        const row = settingsRows.find((r) => r.id === 1)
-        if (!row) return
-        const snapshot: SettingsSnapshot = {
-            timeLimitSeconds: row.timeLimitSeconds,
-            verbsPerLevel: row.verbsPerLevel,
-        }
-        setInitialSettings(snapshot)
-        setTimeLimitInput(String(snapshot.timeLimitSeconds))
-        setVerbsPerLevelInput(String(snapshot.verbsPerLevel))
-        setIsLoading(false)
-    }, [settingsRows])
+    const settingsRow = settingsRows.find((r) => r.id === 1)
+    const settingsRowKey = settingsRow ? `${settingsRow.timeLimitSeconds}:${settingsRow.verbsPerLevel}` : null
+    if (settingsRow && settingsRowKey !== syncedRowKey) {
+        setSyncedRowKey(settingsRowKey)
+        setInitialSettings({
+            timeLimitSeconds: settingsRow.timeLimitSeconds,
+            verbsPerLevel: settingsRow.verbsPerLevel,
+        })
+        setTimeLimitInput(String(settingsRow.timeLimitSeconds))
+        setVerbsPerLevelInput(String(settingsRow.verbsPerLevel))
+    }
+    const isLoading = syncedRowKey === null
 
     useEffect(() => {
-        if (!successMessage) {
-            setIsSuccessFading(false)
-            return
-        }
-
-        setIsSuccessFading(false)
+        if (!successMessage) return
 
         const fadeTimer = window.setTimeout(() => {
             setIsSuccessFading(true)

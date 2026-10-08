@@ -13,7 +13,7 @@
 ### Visual Layer: **React Three Fiber (R3F)**
 - Canvas at `z-index: 0` (background), Tailwind UI at `z-index: 10`.
 
-### Backend: **SpacetimeDB 2.6 (Rust module)**
+### Backend: **SpacetimeDB 2.11 (Rust module)**
 - Single source of truth: tables, reducers, and procedures are colocated in
   the WASM-compiled Rust crate at `spacetimedb/`.
 - Subscriptions let the client react to server-side state changes without
@@ -29,13 +29,10 @@
 
 **1. `user` (public)**
 - Mirrors `auth.users` from the old Supabase schema — plus role management.
-- `identity: Identity` (PK) — the SpacetimeDB connection identity, auto-
-  generated per device and persisted in localStorage as a signed JWT.
+- `identity: Identity` (PK) — derived by SpacetimeDB from the Google ID
+  token's `iss` + `sub`, so it is stable across devices.
 - `username_lower: String` (unique) — case-folded for unique lookups.
 - `username: String` — display name.
-- `password_hash: String` — argon2 PHC string (kept for future cross-device
-  login; not currently validated server-side since each device has its own
-  identity).
 - `role: String` — `"student"` (default) or `"admin"`.
 - `current_level_cap: u32` — highest unlocked level.
 - `created_at: Timestamp`.
@@ -73,7 +70,8 @@
 ### B. Lifecycle
 
 `init` reducer seeds `app_setting` row 1 with defaults
-(180 s time limit, 5 verbs per level, category 1 active).
+(180 s time limit, 5 verbs per level, category 1 active) and a `user` row
+named `admin` for the database owner (the publishing CLI identity).
 
 ---
 
@@ -82,28 +80,23 @@
 ### A. Auth
 
 There is no separate `auth.users` table — SpacetimeDB identities ARE users.
-The web SDK generates a per-device identity on first connection and signs it
-into a JWT stored in `localStorage`. Subsequent visits reuse the same token
-so the player stays logged in.
+Players sign in **only with Google (OIDC)**. SpacetimeDB accepts any OpenID
+Connect compliant JWT and derives the `Identity` from the token's `iss` +
+`sub` claims, so a Google account maps to a single stable identity across all
+devices. The client obtains a Google ID token via Google Identity Services,
+stores it in `localStorage` and passes it through
+`DbConnection.builder().withToken(idToken)`.
 
-Username uniqueness is enforced server-side (case-folded). Passwords are
-hashed with argon2 (`SaltString::from_b64(...)` with salt bytes from
-`ctx.rng()`, since SpacetimeDB disallows `getrandom`).
+The `register_google_user(username)` reducer validates the token's issuer
+(`accounts.google.com`) and audience (`GOOGLE_CLIENT_ID`, a public value) via
+`ctx.sender_auth().jwt()` before creating the `user` row, so anonymous
+identities cannot create profiles. The client also refuses to enter the app
+unless the session is Google-authenticated. Username uniqueness is enforced
+server-side (case-folded). The Google client ID is public (no secret in the PWA).
 
-The very first `register_admin` call is allowed even without an existing
-admin; subsequent admin registrations are rejected (`promote_to_admin` is
-the only path after that).
-
-**Google sign-in (OIDC).** SpacetimeDB accepts any OpenID Connect compliant
-JWT and derives the `Identity` from the token's `iss` + `sub` claims, so a
-Google account maps to a single stable identity across all devices (no
-password). The client obtains a Google ID token via Google Identity Services
-and passes it through `DbConnection.builder().withToken(idToken)`. The
-`register_google_user(username)` reducer validates the token's issuer
-(`accounts.google.com`) and audience (`GOOGLE_CLIENT_ID`, a public value via
-`ctx.sender_auth().jwt()`) before creating a password-less `user` row. The
-Google client ID is public (no secret in the PWA). Anonymous/device identities
-and username/password login continue to work alongside Google sign-in.
+The only non-Google user is the database owner, seeded as `admin` by `init`
+so CLI tooling (`verbs:import`, smoke checks) can call admin reducers. An
+admin promotes a Google user with `promote_to_admin(username)`.
 
 ### B. Authorization
 

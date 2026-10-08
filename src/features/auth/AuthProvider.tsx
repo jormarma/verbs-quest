@@ -36,24 +36,23 @@ function GoogleSignInButton({
     return <div ref={ref} className="flex justify-center min-h-[44px]" />
 }
 
+function Spinner() {
+    return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+            <div className="animate-pulse rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+        </div>
+    )
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const { t } = useTranslation()
     const { isActive: isConnected, identity, connectionError } = useSpacetimeDB()
     const identityHex = identity?.toHexString() ?? null
-    const [hasProfile, setHasProfile] = useState<boolean | null>(null)
-    const [user, setUser] = useState<User | null>(null)
-    const [loading, setLoading] = useState(true)
 
     const [username, setUsername] = useState('')
-    const [password, setPassword] = useState('')
-    const [repeatPassword, setRepeatPassword] = useState('')
-    const [isRegistering, setIsRegistering] = useState(false)
     const [authError, setAuthError] = useState('')
     const [isLoadingAuth, setIsLoadingAuth] = useState(false)
-    const usernameInputRef = useRef<HTMLInputElement>(null)
-    const passwordInputRef = useRef<HTMLInputElement>(null)
-    const repeatPasswordInputRef = useRef<HTMLInputElement>(null)
-    const authMethod = getAuthMethod()
+    const isGoogleSession = getAuthMethod() === 'google'
 
     const getErrorMessage = (error: unknown) => {
         if (error instanceof Error) return error.message
@@ -71,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         beginGoogleSession(idToken)
         window.location.reload()
     }, [])
+
+    const handleGoogleError = useCallback(() => setAuthError(t('auth.google_failed')), [t])
 
     const handleGoogleRegister = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -92,104 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }
 
-    const resetAuthForm = useCallback(() => {
-        setUsername('')
-        setPassword('')
-        setRepeatPassword('')
-        setAuthError('')
-        setIsRegistering(false)
-    }, [])
-
     // ──────────────────────────────────────────────────────────────────────
     // Profile subscription — derive auth state from the user table for
     // the connected identity.
     // ──────────────────────────────────────────────────────────────────────
 
-    const [userRows] = useTable(tables.user)
-
-    useEffect(() => {
-        if (!isConnected || !identityHex) return
-        const me = userRows.find((u) => u.identity.toHexString() === identityHex)
-        if (me) {
-            setUser(me)
-            setHasProfile(true)
-        } else {
-            setUser(null)
-            setHasProfile(false)
-        }
-        setLoading(false)
-    }, [isConnected, identityHex, userRows])
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Auth form: register / sign in
-    // ──────────────────────────────────────────────────────────────────────
-
-    useEffect(() => {
-        if (loading || hasProfile) return
-
-        const clearNativeInputs = () => {
-            if (usernameInputRef.current) usernameInputRef.current.value = ''
-            if (passwordInputRef.current) passwordInputRef.current.value = ''
-            if (repeatPasswordInputRef.current) repeatPasswordInputRef.current.value = ''
-        }
-
-        clearNativeInputs()
-        const timeoutId = window.setTimeout(clearNativeInputs, 0)
-        return () => window.clearTimeout(timeoutId)
-    }, [loading, hasProfile, isRegistering])
-
-    const handleAuth = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setAuthError('')
-
-        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-            setAuthError(t('auth.error.username_chars'))
-            return
-        }
-        if (username.length < 3 || username.length > 12) {
-            setAuthError(t('auth.error.username_chars'))
-            return
-        }
-        if (password.length < 6) {
-            setAuthError(t('auth.error.password_short'))
-            return
-        }
-        if (isRegistering && password !== repeatPassword) {
-            setAuthError(t('auth.error.password_mismatch'))
-            return
-        }
-
-        setIsLoadingAuth(true)
-
-        try {
-            const conn = getConnection()
-            if (isRegistering) {
-                await conn.reducers.registerUser({
-                    username: username.trim(),
-                    password,
-                })
-            } else {
-                await conn.reducers.loginUser({
-                    username: username.trim(),
-                    password,
-                })
-            }
-            setUsername('')
-            setPassword('')
-            setRepeatPassword('')
-            setAuthError('')
-        } catch (error: unknown) {
-            setAuthError(getErrorMessage(error))
-        } finally {
-            setIsLoadingAuth(false)
-        }
-    }
+    const [userRows, userRowsReady] = useTable(tables.user)
+    const user: User | null =
+        (identityHex && userRows.find((u) => u.identity.toHexString() === identityHex)) || null
+    const loading = !identityHex || !userRowsReady
+    const hasProfile = user !== null
 
     const signOut = async () => {
         // "Sign out" locally: clear the stored token + drop the profile.
         // The SDK connection itself stays open but will lose the user row on
         // next reconnect. Reload to fully reset state.
-        resetAuthForm()
+        setUsername('')
+        setAuthError('')
         clearStoredToken()
         googleSignOut()
         try {
@@ -204,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (connectionError) {
             // A Google session whose ID token expired fails to reconnect — offer
             // re-authentication instead of the generic "DB unreachable" message.
-            if (authMethod === 'google' && GOOGLE_ENABLED) {
+            if (isGoogleSession && GOOGLE_ENABLED) {
                 return (
                     <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
                         <div className="text-center max-w-md p-6 space-y-4">
@@ -214,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             <p className="text-slate-300">{t('auth.session_expired_subtitle')}</p>
                             <GoogleSignInButton
                                 onCredential={handleGoogleCredential}
-                                onError={() => setAuthError(t('auth.google_failed'))}
+                                onError={handleGoogleError}
                             />
                             <button
                                 onClick={signOut}
@@ -241,22 +161,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 </div>
             )
         }
-        return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-                <div className="animate-pulse rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
-            </div>
-        )
+        return <Spinner />
     }
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-                <div className="animate-pulse rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
-            </div>
-        )
-    }
+    if (loading) return <Spinner />
 
-    if (hasProfile === false) {
+    // Only Google-authenticated connections may play; an anonymous connection
+    // always lands on the sign-in screen, even if it once owned a profile.
+    if (!isGoogleSession || hasProfile === false) {
         return (
             <div className="relative min-h-screen w-full overflow-hidden text-slate-100">
                 <Scene />
@@ -281,163 +193,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             <div className="flex justify-end mb-3">
                                 <LanguageSwitcher />
                             </div>
-                            {authMethod === 'google' ? (
-                            <div className="space-y-4">
-                                <div className="text-center space-y-1">
-                                    <h2 className="text-xl font-bold text-white">{t('auth.choose_name_title')}</h2>
-                                    <p className="text-sm text-slate-300">{t('auth.choose_name_subtitle')}</p>
+                            {authError && (
+                                <div className="mb-4 p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
+                                    {authError}
                                 </div>
-                                <form onSubmit={handleGoogleRegister} className="space-y-4" autoComplete="off">
-                                    {authError && (
-                                        <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
-                                            {authError}
+                            )}
+                            {isGoogleSession ? (
+                                <div className="space-y-4">
+                                    <div className="text-center space-y-1">
+                                        <h2 className="text-xl font-bold text-white">{t('auth.choose_name_title')}</h2>
+                                        <p className="text-sm text-slate-300">{t('auth.choose_name_subtitle')}</p>
+                                    </div>
+                                    <form onSubmit={handleGoogleRegister} className="space-y-4" autoComplete="off">
+                                        <div className="space-y-1 text-left">
+                                            <label className="text-sm font-medium text-slate-300">{t('auth.username')}</label>
+                                            <input
+                                                type="text"
+                                                name="vq_google_username"
+                                                required
+                                                minLength={3}
+                                                maxLength={12}
+                                                pattern="^[a-zA-Z0-9_]+$"
+                                                title={t('auth.username_hint')}
+                                                value={username}
+                                                onChange={(e) => setUsername(e.target.value)}
+                                                placeholder={t('auth.placeholder_username')}
+                                                autoComplete="off"
+                                                autoCapitalize="none"
+                                                spellCheck={false}
+                                                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
+                                            />
                                         </div>
-                                    )}
-                                    <div className="space-y-1 text-left">
-                                        <label className="text-sm font-medium text-slate-300">{t('auth.username')}</label>
-                                        <input
-                                            type="text"
-                                            name="vq_google_username"
-                                            required
-                                            minLength={3}
-                                            maxLength={12}
-                                            pattern="^[a-zA-Z0-9_]+$"
-                                            title={t('auth.username_hint')}
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
-                                            placeholder={t('auth.placeholder_username')}
-                                            autoComplete="off"
-                                            autoCapitalize="none"
-                                            spellCheck={false}
-                                            className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                                        />
-                                    </div>
-                                    <div className="flex justify-center pt-2">
-                                        <Button
-                                            type="submit"
-                                            variant="default"
-                                            disabled={isLoadingAuth}
-                                            className="w-fit min-w-[140px] mt-2 h-11 text-base sm:text-lg font-bold"
+                                        <div className="flex justify-center pt-2">
+                                            <Button
+                                                type="submit"
+                                                variant="default"
+                                                disabled={isLoadingAuth}
+                                                className="w-fit min-w-[140px] mt-2 h-11 text-base sm:text-lg font-bold"
+                                            >
+                                                {isLoadingAuth ? '...' : t('auth.confirm_name')}
+                                            </Button>
+                                        </div>
+                                    </form>
+                                    <div className="text-center">
+                                        <button
+                                            onClick={signOut}
+                                            type="button"
+                                            className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors text-sm"
                                         >
-                                            {isLoadingAuth ? '...' : t('auth.confirm_name')}
-                                        </Button>
+                                            {t('auth.use_other_account')}
+                                        </button>
                                     </div>
-                                </form>
-                                <div className="text-center">
-                                    <button
-                                        onClick={signOut}
-                                        type="button"
-                                        className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors text-sm"
-                                    >
-                                        {t('auth.use_other_account')}
-                                    </button>
                                 </div>
-                            </div>
-                            ) : (
-                            <>
-                            <form onSubmit={handleAuth} className="space-y-4" autoComplete="off">
-                                {authError && (
-                                    <div className="p-3 rounded-lg bg-red-900/50 border border-red-500/50 text-red-200 text-sm text-center">
-                                        {authError}
-                                    </div>
-                                )}
-
-                                <div className="space-y-1 text-left">
-                                    <label className="text-sm font-medium text-slate-300">{t('auth.username')}</label>
-                                    <input
-                                        ref={usernameInputRef}
-                                        type="text"
-                                        name="vq_username"
-                                        required
-                                        minLength={3}
-                                        maxLength={12}
-                                        pattern="^[a-zA-Z0-9_]+$"
-                                        title={t('auth.username_hint')}
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        placeholder={t('auth.placeholder_username')}
-                                        autoComplete="off"
-                                        autoCapitalize="none"
-                                        spellCheck={false}
-                                        className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                                    />
-                                </div>
-                                <div className="space-y-1 text-left">
-                                    <label className="text-sm font-medium text-slate-300">{t('auth.password')}</label>
-                                    <input
-                                        ref={passwordInputRef}
-                                        type="password"
-                                        name="vq_password"
-                                        required
-                                        minLength={6}
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        autoComplete="off"
-                                        className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                                    />
-                                </div>
-
-                                {isRegistering && (
-                                    <div className="space-y-1 text-left animate-in fade-in slide-in-from-top-1">
-                                        <label className="text-sm font-medium text-slate-300">{t('auth.repeat_password')}</label>
-                                        <input
-                                            ref={repeatPasswordInputRef}
-                                            type="password"
-                                            name="vq_repeat_password"
-                                            required
-                                            minLength={6}
-                                            value={repeatPassword}
-                                            onChange={(e) => {
-                                                setRepeatPassword(e.target.value)
-                                                setAuthError('')
-                                            }}
-                                            autoComplete="off"
-                                            className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                                        />
-                                    </div>
-                                )}
-
-                                <div className="flex justify-center pt-2">
-                                    <Button
-                                        type="submit"
-                                        variant="default"
-                                        disabled={isLoadingAuth}
-                                        className="w-fit min-w-[140px] mt-2 h-11 text-base sm:text-lg font-bold"
-                                    >
-                                        {isLoadingAuth ? '...' : (isRegistering ? t('auth.create_profile') : t('auth.play_now'))}
-                                    </Button>
-                                </div>
-                            </form>
-
-                            <div className="mt-6 text-center text-sm text-slate-400">
-                                {isRegistering ? t('auth.already_have_profile') : t('auth.new_player')}
-                                <button
-                                    onClick={() => {
-                                        setIsRegistering(!isRegistering)
-                                        setAuthError('')
-                                        setRepeatPassword('')
-                                    }}
-                                    type="button"
-                                    className="text-blue-400 hover:text-blue-300 font-semibold hover:underline focus:outline-none transition-colors"
-                                >
-                                    {isRegistering ? t('auth.signin') : t('auth.signup')}
-                                </button>
-                            </div>
-
-                            {GOOGLE_ENABLED && (
-                                <>
-                                    <div className="flex items-center gap-3 my-5">
-                                        <div className="h-px flex-1 bg-slate-700" />
-                                        <span className="text-xs uppercase tracking-wide text-slate-400">{t('auth.or')}</span>
-                                        <div className="h-px flex-1 bg-slate-700" />
-                                    </div>
+                            ) : GOOGLE_ENABLED ? (
+                                <div className="space-y-4 text-center">
+                                    <p className="text-slate-300">{t('auth.google_signin_prompt')}</p>
                                     <GoogleSignInButton
                                         onCredential={handleGoogleCredential}
-                                        onError={() => setAuthError(t('auth.google_failed'))}
+                                        onError={handleGoogleError}
                                     />
-                                </>
-                            )}
-                            </>
+                                </div>
+                            ) : (
+                                <p className="p-3 rounded-lg bg-amber-900/40 border border-amber-500/50 text-amber-200 text-sm text-center">
+                                    {t('auth.google_not_configured')}
+                                </p>
                             )}
                         </div>
                     </div>

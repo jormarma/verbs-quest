@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'docs']),
+  globalIgnores(['dist', 'docs', 'src/lib/spacetime/module_bindings']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

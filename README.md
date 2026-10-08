@@ -8,13 +8,14 @@ and a SpacetimeDB Rust module on the backend.
 | Layer | Tech |
 | --- | --- |
 | Frontend | Vite + React 19 (TypeScript), Zustand, React Three Fiber, Tailwind, vite-plugin-pwa |
-| Backend | SpacetimeDB 2.6 (Rust module) at `spacetimedb/`, single source of truth for users, verbs, sessions, and settings |
-| Auth | Per-device SpacetimeDB identity (auto-signed JWT in localStorage) + argon2-hashed passwords |
+| Backend | SpacetimeDB 2.11 (Rust module) at `spacetimedb/`, single source of truth for users, verbs, sessions, and settings |
+| Auth | Google sign-in only (OIDC ID token used as the SpacetimeDB connection token) |
 
 ## Run locally
 
-Prerequisites: Node ≥ 20, pnpm ≥ 10, Rust + `wasm32-unknown-unknown` target,
-[SpacetimeDB CLI](https://spacetimedb.com/install) ≥ 2.6.
+Prerequisites: Node ≥ 20, pnpm ≥ 12, Rust ≥ 1.96 + `wasm32-unknown-unknown` target,
+[SpacetimeDB CLI](https://spacetimedb.com/install) ≥ 2.11, and
+`VITE_GOOGLE_CLIENT_ID` set (see [Google sign-in](#google-sign-in-oidc)).
 
 ```bash
 # Terminal 1 — start SpacetimeDB (only needed once per boot)
@@ -24,23 +25,20 @@ spacetime start --jwt-key-dir ~/.mavis/agents/mavis/spacetime/
 pnpm stdb:build
 pnpm stdb:publish:local
 
-# Terminal 3 — seed verbs and (optionally) bootstrap an admin
+# Terminal 3 — seed verbs (the publishing CLI identity is seeded as admin)
 pnpm verbs:import:dry   # see what would be inserted
-pnpm verbs:import       # actually insert all 490 verbs across the 3 categories
-
-# Bootstrap the very first admin (no admin exists yet)
-spacetime call --server local verbs-quest register_admin '"admin"' '"yourpassword"'
+pnpm verbs:import       # actually insert all 477 verbs across the 3 categories
 
 # Terminal 4 — frontend
 pnpm dev
 ```
 
-Open <http://localhost:5173>. The very first connection auto-generates a
-device identity and stores its JWT in `localStorage`. Subsequent visits reuse
-that identity so the player stays logged in.
+Open <http://localhost:5173> and sign in with Google. The first time, pick a
+display name. To give a Google user admin rights:
 
-If you ever want to log out (or move to a new device), open DevTools → Application
-→ Local Storage and delete the `verbs-quest.stdb.token` key.
+```bash
+spacetime call --server local verbs-quest promote_to_admin '"their_username"'
+```
 
 ## Build locally
 
@@ -80,8 +78,8 @@ Publish the database module and seed verbs before the live site can work:
 
 ```bash
 pnpm stdb:publish:maincloud
-pnpm verbs:import
-spacetime call verbs-quest register_admin '"admin"' '"yourpassword"'
+pnpm verbs:import --server maincloud
+spacetime call verbs-quest promote_to_admin '"their_username"'   # after they sign in with Google
 ```
 
 ## Tests
@@ -103,14 +101,14 @@ pnpm test:rust
 
 ## Google sign-in (OIDC)
 
-Google "Sign in with Google" is supported via SpacetimeDB's OpenID Connect
-support. SpacetimeDB accepts any OIDC-compliant JWT and derives a **stable
+"Sign in with Google" is the only way players log in, via SpacetimeDB's OpenID
+Connect support. SpacetimeDB accepts any OIDC-compliant JWT and derives a **stable
 `Identity` from the token's `iss` + `sub`**, so one Google account maps to one
 identity across every device/browser automatically.
 
 The Google **client ID is public** (the client *secret* is never used in this
-browser ID-token flow), so nothing secret ships in the PWA. The button is hidden
-until `VITE_GOOGLE_CLIENT_ID` is set.
+browser ID-token flow), so nothing secret ships in the PWA. Without
+`VITE_GOOGLE_CLIENT_ID` the sign-in screen shows a "not configured" notice.
 
 ### 1. Google Cloud Console
 1. APIs & Services → **OAuth consent screen**: configure (External), add your
@@ -137,13 +135,9 @@ Set `VITE_GOOGLE_CLIENT_ID` to the same value:
 - Cloudflare Pages: as a Production environment variable
 
 The first time a Google user signs in they pick a display name (3–12 chars),
-which calls the password-less `register_google_user` reducer.
+which calls the `register_google_user` reducer.
 
-## Cross-device login (username/password)
-
-Alternatively, sign in with an existing username and password on a new device.
-The `login_user` reducer verifies credentials and re-binds progress to the
-current device identity. Sign out first if the device already has a profile.
+## Regenerating bindings
 
 After changing the Rust module, regenerate client bindings:
 
@@ -180,8 +174,10 @@ Import behavior:
 - `past` → `verb.past_simple`
 - `participle` → `verb.past_participle`
 - `category` is stored in `verb.category`
+- verbs are grouped into levels of 5 in CSV order within each category
 - category 1 is initially active; categories 2 and 3 are inactive until the
   admin selects one (see below)
+- category 1 is the 75-verb list from the class handout, in its original order
 
 ## Admin verb categories
 
@@ -223,8 +219,8 @@ This validates:
 ## Manual verification checklist
 
 1. Run `pnpm verbs:import` to seed the verbs table.
-2. Register an admin with `register_admin` (see above).
-3. Log in as the admin and open the `Verbs` tab.
+2. Sign in with Google, pick a name, then promote yourself with `promote_to_admin` (see above).
+3. Reload, and open the `Verbs` tab.
 4. Switch category to `2`, apply, refresh, and verify category persists.
 5. Switch category to `3`, apply, and verify more levels are available to players.
 6. Start a run with a verb that has alternative forms (e.g. `burn`), verify

@@ -7,11 +7,8 @@ import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
 import DeleteVerbReducer from "../delete_verb_reducer";
-import LoginUserReducer from "../login_user_reducer";
 import PromoteToAdminReducer from "../promote_to_admin_reducer";
-import RegisterAdminReducer from "../register_admin_reducer";
 import RegisterGoogleUserReducer from "../register_google_user_reducer";
-import RegisterUserReducer from "../register_user_reducer";
 import SetActiveVerbCategoryReducer from "../set_active_verb_category_reducer";
 import SubmitLevelAttemptReducer from "../submit_level_attempt_reducer";
 import TruncateVerbsReducer from "../truncate_verbs_reducer";
@@ -19,11 +16,8 @@ import UpdateAppSettingsReducer from "../update_app_settings_reducer";
 import UpsertVerbReducer from "../upsert_verb_reducer";
 
 export type DeleteVerbParams = __Infer<typeof DeleteVerbReducer>;
-export type LoginUserParams = __Infer<typeof LoginUserReducer>;
 export type PromoteToAdminParams = __Infer<typeof PromoteToAdminReducer>;
-export type RegisterAdminParams = __Infer<typeof RegisterAdminReducer>;
 export type RegisterGoogleUserParams = __Infer<typeof RegisterGoogleUserReducer>;
-export type RegisterUserParams = __Infer<typeof RegisterUserReducer>;
 export type SetActiveVerbCategoryParams = __Infer<typeof SetActiveVerbCategoryReducer>;
 export type SubmitLevelAttemptParams = __Infer<typeof SubmitLevelAttemptReducer>;
 export type TruncateVerbsParams = __Infer<typeof TruncateVerbsReducer>;
