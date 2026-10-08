@@ -25,3 +25,6 @@ client_secret*.json
 *.njsproj
 *.sln
 *.sw?
+
+# Local proof written by .claude/skills/verify (never committed)
+verify-evidence/

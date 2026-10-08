@@ -1,0 +1,9 @@
+{
+  "name": "verbs-quest-verify-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Helper dependencies for the project-local verify skill. Not part of the app build.",
+  "dependencies": {
+    "playwright-core": "1.64.0"
+  }
+}
