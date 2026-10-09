@@ -101,11 +101,16 @@ A flow drives a whole level through the UI and checks the database. Use flows fo
 node .claude/skills/verify/scripts/flows/level-run.mjs --mode quest --level 1 --wrong 1
 node .claude/skills/verify/scripts/flows/level-run.mjs --mode quest --level 1 --wrong 0
 node .claude/skills/verify/scripts/flows/level-run.mjs --mode practice --level 1 --wrong 2
+node .claude/skills/verify/scripts/flows/level-run.mjs --mode quest --level 1 --idle
+node .claude/skills/verify/scripts/flows/level-run.mjs --mode quest --level 1 --offline
+node .claude/skills/verify/scripts/flows/level-run.mjs --mode quest --level 14 --wrong 0 --then-level 15
 ```
 
 - `--mode` is `quest` or `practice`. `--level` is a level in the active list and within the user's cap. `--wrong` is the number of deliberate misses, sent as `zzz` on the first answers; the app asks each missed verb again. `--pace-ms` sets the wait before each answer, 900 by default.
-- Exit 0 means every assertion passed. Each run writes a JSON file into `flows/`, named by mode, level, and misses, such as `flows/quest-level1-wrong1.json`. It holds each answer and its feedback, the database rows before and after, and each assertion.
-- `NOTE  known issue` lines report app defects that the flow observed. They are recorded in the JSON `knownIssues` and do not fail the run. See Known app gaps below.
+- `--idle` answers nothing and waits for the time limit to run out, which takes about three minutes. The server stores the run as `downgraded` and lowers the scratch admin's level cap by one. Run it after the other quest runs and before an unlock run.
+- `--offline` goes offline after Start Quest, so the finish screen says "Run not saved" and the run waits in the local queue. It then goes back online and checks that the queued run is saved once.
+- `--then-level N` runs after a quest finishes. It opens the lobby, selects level N, and checks its lesson, all on the same page. Use it after an unlock run, when the cap equals the level just played.
+- Exit 0 means every assertion passed. Each run writes a JSON file into `flows/`, named by mode, level, and misses, such as `flows/quest-level1-wrong1.json`; the `--idle` and `--offline` runs are `quest-level1-idle.json` and `quest-level1-offline.json`. It holds each answer and its feedback, the database rows before and after, and each assertion.
 
 ### Feature map
 
@@ -116,7 +121,7 @@ node .claude/skills/verify/scripts/flows/level-run.mjs --mode practice --level 1
 Everything a run produces lives in the run's folder under `verify-evidence/` at the repo root. The folder is git-ignored, and cleanup keeps it.
 
 - `screens/` holds screenshots named for the feature and the state, such as `admin-verb-list.png` or `quest-finished-level1-wrong1.png`.
-- `flows/` holds one JSON file per flow run: the answers with their feedback, the finish heading, the `game_session` rows before and after, the `user_attempt` rows before and after, `knownIssues`, and every assertion with its result.
+- `flows/` holds one JSON file per flow run: the answers with their feedback, the finish heading, the `game_session` rows before and after, the `user_attempt` rows before and after, and every assertion with its result.
 - `logs/` holds `stdb.log`, `publish.log`, `import.log`, `vite.log`, and `chrome.log` from the launch.
 - `run.env` holds the ports, process IDs, scratch path, git HEAD, and start and cleanup times. It never holds the token.
 - `verify-evidence/current` is a symlink to the newest run.
@@ -125,7 +130,7 @@ Proof standards:
 
 - Drive the real UI for the behavior under test. The only steps that skip the UI are the admin session injection, the CLI import, and the SQL reads; each feature file names the ones it uses.
 - Capture the action and its result: a `PASS` line for the expected text, a screenshot after the action, and the database rows the action wrote.
-- Check side effects, not only the screen. A quest adds exactly one `game_session` row with the right level, error count, and perfect flag, and the server stores `unlocked` for a perfect run and `maintained` otherwise. Practice adds no row and leaves `user_attempt` unchanged.
+- Check side effects, not only the screen. A quest adds exactly one `game_session` row with the right level, error count, and perfect flag, and the server stores `unlocked` for a perfect run, `maintained` for an on-time run with errors, and `downgraded` for an over-time run. Practice adds no row and leaves `user_attempt` unchanged.
 - Use no mocks. Everything runs on the real SpacetimeDB module and the real Vite app, against the scratch database only.
 - Report exactly what you drove. A check you did not run is reported as not verified, never as passed.
 
@@ -159,12 +164,6 @@ To clean an older run, pass its folder name under `verify-evidence/` as the argu
 | `scripts/lib.mjs` | Imported by the Node helpers; not run directly | Run loading, SQL, browser connection, and argument parsing |
 
 The Node helpers need `playwright-core`, which `launch.sh` installs into `scripts/` with `npm ci` the first time it runs.
-
-## Known app gaps
-
-These app defects are real and verified. The skill reports them and does not fix them.
-
-- Nothing subscribes to the `game_session` and `user_attempt` tables, so the client reads an empty cache. "TOP 3 TIMES" stays on "Loading...", and a perfect run shows "Good job, but you need a perfect run to unlock the next level." even though the server stored `unlocked`. The reading code is in `src/lib/utils/sync.ts`, and the perfect-run branches are in `src/App.tsx`. The quest flow reports both as NOTE lines.
 
 ## Maintenance
 
