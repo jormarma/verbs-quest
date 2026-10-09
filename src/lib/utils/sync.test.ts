@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { submitLevelAttempt, type LevelAttemptPayload } from './sync'
+import { submitLevelAttempt, syncOfflineQueue, type LevelAttemptPayload } from './sync'
 
 const fake = vi.hoisted(() => ({ connection: null as unknown }))
 
@@ -93,14 +93,16 @@ function emptyServer(submit: Server['submit'] = recordRun): Server {
 interface FakeSubscriptionBuilder {
   onApplied(callback: () => void): FakeSubscriptionBuilder
   onError(callback: (error: Error) => void): FakeSubscriptionBuilder
-  subscribe(): { unsubscribe: () => void }
+  subscribe(queries: string[]): { unsubscribe: () => void }
 }
 
-function fakeConnection(server: Server) {
+function fakeConnection(server: Server, options: { subscriptionApplies?: boolean } = {}) {
   let subscribed = false
   let cachedAttempts: AttemptRow[] = []
   let cachedSessions: SessionRow[] = []
   let applied: (() => void) | undefined
+  const subscribedQueries: string[] = []
+  const reducerCalls: boolean[] = []
 
   const refresh = () => {
     cachedAttempts = server.attempts.filter((row) => row.identity.toHexString() === CALLER)
@@ -115,25 +117,34 @@ function fakeConnection(server: Server) {
     onError() {
       return builder
     },
-    subscribe() {
-      setTimeout(() => {
-        subscribed = true
-        refresh()
-        applied?.()
-      }, 0)
+    subscribe(queries) {
+      subscribedQueries.push(...queries)
+      if (options.subscriptionApplies !== false) {
+        setTimeout(() => {
+          subscribed = true
+          refresh()
+          applied?.()
+        }, 0)
+      }
       return { unsubscribe: () => {} }
     },
   }
 
+  const userRow = { identity: identity(CALLER), currentLevelCap: 1 }
+
   return {
     identity: identity(CALLER),
+    subscribedQueries,
+    reducerCalls,
     subscriptionBuilder: () => builder,
     db: {
+      user: { identity: { find: (id: Identity) => (id.toHexString() === CALLER ? userRow : null) } },
       user_attempt: { iter: () => cachedAttempts.values() },
       game_session: { iter: () => cachedSessions.values() },
     },
     reducers: {
       submitLevelAttempt: async (args: ReducerArgs) => {
+        reducerCalls.push(subscribed)
         await server.submit(args, server)
         if (subscribed) refresh()
       },
@@ -167,6 +178,7 @@ describe('submitLevelAttempt', () => {
     expect(result.success).toBe(true)
     expect(result.data).toEqual({ status: 'unlocked', new_level: 2 })
     expect(result.topScores?.map((score) => score.duration_seconds)).toEqual([12, 20])
+    expect(result.previousLevelCap).toBe(1)
   })
 
   it('does not invent a verdict when the server recorded none', async () => {
@@ -222,5 +234,71 @@ describe('submitLevelAttempt', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("subscribes only to the caller's own attempt and session rows", async () => {
+    const connection = fakeConnection(emptyServer())
+    fake.connection = connection
+
+    await submitLevelAttempt(payload)
+
+    const queries = connection.subscribedQueries
+    expect(queries.some((query) => query.includes('user_attempt'))).toBe(true)
+    expect(queries.some((query) => query.includes('game_session'))).toBe(true)
+    for (const query of queries) {
+      expect(query).toContain(`0x${CALLER}`)
+    }
+  })
+
+  it('calls the reducer only after the caller subscription is applied', async () => {
+    const connection = fakeConnection(emptyServer())
+    fake.connection = connection
+
+    await submitLevelAttempt(payload)
+
+    expect(connection.reducerCalls).toEqual([true])
+  })
+
+  it('queues the run without calling the reducer when the subscription never applies', async () => {
+    vi.useFakeTimers()
+    try {
+      const connection = fakeConnection(emptyServer(), { subscriptionApplies: false })
+      fake.connection = connection
+
+      const pending = submitLevelAttempt(payload)
+      await vi.advanceTimersByTimeAsync(10_000)
+      const result = await pending
+
+      expect(result).toMatchObject({ success: false, queued: true })
+      expect(connection.reducerCalls).toEqual([])
+      expect(JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) ?? 'null')).toEqual([payload])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a replayed run queued while the subscription still fails', async () => {
+    vi.useFakeTimers()
+    try {
+      fake.connection = fakeConnection(emptyServer(), { subscriptionApplies: false })
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify([payload]))
+
+      const pending = syncOfflineQueue()
+      await vi.advanceTimersByTimeAsync(10_000)
+      await pending
+
+      expect(JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) ?? 'null')).toEqual([payload])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('queues the run when the connection has no identity yet', async () => {
+    fake.connection = { ...fakeConnection(emptyServer()), identity: undefined }
+
+    const result = await submitLevelAttempt(payload)
+
+    expect(result).toMatchObject({ success: false, queued: true })
+    expect(JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) ?? 'null')).toEqual([payload])
   })
 })

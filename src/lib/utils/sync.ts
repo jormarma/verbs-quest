@@ -10,6 +10,8 @@ export interface LevelAttemptPayload {
 }
 
 const OFFLINE_QUEUE_KEY = 'verbs_quest_offline_queue'
+const SERVER_TIMEOUT_MS = 10_000
+type Connection = ReturnType<typeof getConnection>
 
 export interface SubmitAttemptResult {
     success: boolean
@@ -21,6 +23,7 @@ export interface SubmitAttemptResult {
         status: string
         new_level: number
     }
+    previousLevelCap?: number
     topScores?: TopScoreEntry[]
 }
 
@@ -33,37 +36,48 @@ export async function submitLevelAttempt(payload: LevelAttemptPayload): Promise<
 
     try {
         const conn = getConnection()
+        const caller = conn.identity
+        if (!caller) {
+            return queueUnsent(payload, 'SpacetimeDB has not assigned an identity yet')
+        }
+        const callerHex = caller.toHexString()
 
-        // Snapshot the top-5 sessions BEFORE the reducer runs so we know which
-        // ones already existed; the new session will appear once the reducer
-        // commits.
-        const beforeTop = loadTopScores(conn, payload.levelId)
+        // Rows the reducer writes reach the cache only through a subscription that
+        // is already applied, so subscribe before calling it.
+        try {
+            await ensureCallerSubscription(conn, callerHex)
+        } catch (e: unknown) {
+            return queueUnsent(payload, e instanceof Error ? e.message : String(e))
+        }
+        const previousLevelCap = conn.db.user.identity.find(caller)?.currentLevelCap
 
-        await conn.reducers.submitLevelAttempt({
-            levelId: payload.levelId,
-            startTimeIso: payload.startTime,
-            endTimeIso: payload.endTime,
-            errorCount: payload.errorCount,
-            questionsCount: payload.questionsCount,
-        })
-
-        // Read back the user_attempt row (set by the reducer) to get status + new level
-        const attempts = [...conn.db.user_attempt.iter()]
-        const me = attempts.find(
-            (a) => a.identity.toHexString() === conn.identity?.toHexString(),
+        // A timed-out reducer may still commit. Its message must not contain "network"
+        // or "fetch", or the catch below would queue it and the run could be recorded twice.
+        await withTimeout(
+            conn.reducers.submitLevelAttempt({
+                levelId: payload.levelId,
+                startTimeIso: payload.startTime,
+                endTimeIso: payload.endTime,
+                errorCount: payload.errorCount,
+                questionsCount: payload.questionsCount,
+            }),
+            SERVER_TIMEOUT_MS,
+            'the server did not answer in time',
         )
 
-        // Top scores — after the call, the new session is in the subscription.
-        const topScores = loadTopScores(conn, payload.levelId)
-        const newTopScores = topScores.length > 0 ? topScores : beforeTop
+        const attempt = [...conn.db.user_attempt.iter()].find(
+            (a) => a.identity.toHexString() === callerHex,
+        )
+        if (!attempt) {
+            return { success: false, error: 'the server returned no verdict for this run' }
+        }
 
         return {
             success: true,
             queued: false,
-            data: me
-                ? { status: me.lastStatus, new_level: me.lastNewLevel }
-                : { status: 'maintained', new_level: 1 },
-            topScores: newTopScores,
+            data: { status: attempt.lastStatus, new_level: attempt.lastNewLevel },
+            previousLevelCap,
+            topScores: loadTopScores(conn, payload.levelId),
         }
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
@@ -78,6 +92,45 @@ export async function submitLevelAttempt(payload: LevelAttemptPayload): Promise<
         console.error('Failed to submit level attempt:', e)
         return { success: false, error: message }
     }
+}
+
+const callerSubscriptions = new WeakMap<Connection, Promise<void>>()
+
+/**
+ * Subscribes to the caller's own attempt and session rows, once per connection.
+ * A failed or timed-out subscription is dropped so the next attempt subscribes again.
+ */
+function ensureCallerSubscription(conn: Connection, callerHex: string): Promise<void> {
+    let subscribed = callerSubscriptions.get(conn)
+    if (!subscribed) {
+        subscribed = withTimeout(
+            new Promise<void>((resolve, reject) => {
+                conn.subscriptionBuilder()
+                    .onApplied(() => resolve())
+                    .onError((ctx) => {
+                        callerSubscriptions.delete(conn)
+                        reject(ctx.event ?? new Error('subscription failed'))
+                    })
+                    .subscribe([
+                        `SELECT * FROM user_attempt WHERE identity = 0x${callerHex}`,
+                        `SELECT * FROM game_session WHERE user_identity = 0x${callerHex}`,
+                    ])
+            }),
+            SERVER_TIMEOUT_MS,
+            'the subscription to your runs was not applied in time',
+        )
+        callerSubscriptions.set(conn, subscribed)
+        subscribed.catch(() => callerSubscriptions.delete(conn))
+    }
+    return subscribed
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const expired = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms)
+    })
+    return Promise.race([work, expired]).finally(() => clearTimeout(timer))
 }
 
 /**
@@ -124,6 +177,13 @@ function loadTopScores(conn: ReturnType<typeof getConnection>, level: number): T
         console.warn('Failed to load top scores locally:', e)
         return []
     }
+}
+
+// Only for failures before the reducer is called: nothing reached the server,
+// so retrying later cannot record the run twice.
+function queueUnsent(payload: LevelAttemptPayload, error: string): SubmitAttemptResult {
+    queueAttemptLocally(payload)
+    return { success: false, queued: true, error }
 }
 
 // Simple localStorage queue for PWA offline capabilities
