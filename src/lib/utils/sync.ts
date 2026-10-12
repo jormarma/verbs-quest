@@ -96,10 +96,6 @@ export async function submitLevelAttempt(payload: LevelAttemptPayload): Promise<
 
 const callerSubscriptions = new WeakMap<Connection, Promise<void>>()
 
-/**
- * Subscribes to the caller's own attempt and session rows, once per connection.
- * A failed or timed-out subscription is dropped so the next attempt subscribes again.
- */
 function ensureCallerSubscription(conn: Connection, callerHex: string): Promise<void> {
     let subscribed = callerSubscriptions.get(conn)
     if (!subscribed) {
@@ -179,8 +175,7 @@ function loadTopScores(conn: ReturnType<typeof getConnection>, level: number): T
     }
 }
 
-// Only for failures before the reducer is called: nothing reached the server,
-// so retrying later cannot record the run twice.
+// Only for failures before the reducer is called, so a retry later cannot record the run twice.
 function queueUnsent(payload: LevelAttemptPayload, error: string): SubmitAttemptResult {
     queueAttemptLocally(payload)
     return { success: false, queued: true, error }

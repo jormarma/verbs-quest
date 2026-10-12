@@ -86,7 +86,6 @@ const PENDING_SUBMISSION: SubmissionFields = {
     topScores: []
 }
 
-// Only a known server verdict is shown. Any other answer is unconfirmed.
 function submissionFields(result: SubmitAttemptResult): SubmissionFields {
     const verdict = result.data?.status
     if (

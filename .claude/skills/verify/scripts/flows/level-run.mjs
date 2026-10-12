@@ -315,7 +315,6 @@ async function main() {
   if (thenLevel !== null) {
     const nextLine = lessonLineFor(thenLevel)
     if (nextLine === '') throw new Error(`no active verbs in level ${thenLevel}; check the active category`)
-    // The marker must survive Continue, Play, and the click on the next level: no page load in between.
     await page.evaluate(() => {
       window.__sameDocument = 'marker'
     })
