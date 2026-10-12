@@ -184,3 +184,74 @@ describe('useGameStore quest submission', () => {
     }
   })
 })
+
+describe('useGameStore run is saved once', () => {
+  beforeEach(() => {
+    resetStore()
+    vi.mocked(submitLevelAttempt).mockClear()
+  })
+
+  function startTimedOutRun() {
+    const { startGame, forceTimeout } = useGameStore.getState()
+    startGame(1, [sampleQuestion], false, { gameMode: 'quest' })
+    void forceTimeout()
+  }
+
+  it('ends a timed-out run before its save is awaited', () => {
+    vi.mocked(submitLevelAttempt).mockReturnValueOnce(new Promise<SubmitAttemptResult>(() => {}))
+
+    startTimedOutRun()
+
+    const { session, gameplay } = useGameStore.getState()
+    expect(session.status).toBe('FINISHED')
+    expect(gameplay.submissionStatus).toBe('pending')
+  })
+
+  it('refuses to pause a timed-out run while it is saved', () => {
+    vi.mocked(submitLevelAttempt).mockReturnValueOnce(new Promise<SubmitAttemptResult>(() => {}))
+    startTimedOutRun()
+
+    useGameStore.getState().pauseGame()
+
+    expect(useGameStore.getState().session.status).toBe('FINISHED')
+  })
+
+  it('submits a timed-out run once when the timer fires again', () => {
+    vi.mocked(submitLevelAttempt).mockReturnValueOnce(new Promise<SubmitAttemptResult>(() => {}))
+    startTimedOutRun()
+
+    void useGameStore.getState().forceTimeout()
+
+    expect(submitLevelAttempt).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not record an answer typed after a timeout', () => {
+    vi.mocked(submitLevelAttempt).mockReturnValueOnce(new Promise<SubmitAttemptResult>(() => {}))
+    startTimedOutRun()
+
+    useGameStore.getState().submitAnswer('went')
+
+    expect(useGameStore.getState().gameplay.history).toEqual([])
+  })
+
+  it('does not submit again on Continue after a timeout', () => {
+    vi.mocked(submitLevelAttempt).mockReturnValueOnce(new Promise<SubmitAttemptResult>(() => {}))
+    startTimedOutRun()
+
+    useGameStore.getState().advanceQuestion()
+
+    expect(submitLevelAttempt).toHaveBeenCalledTimes(1)
+  })
+
+  it('submits a finished run once when Continue is pressed twice', () => {
+    vi.mocked(submitLevelAttempt).mockReturnValueOnce(new Promise<SubmitAttemptResult>(() => {}))
+    const { startGame, submitAnswer, advanceQuestion } = useGameStore.getState()
+    startGame(1, [sampleQuestion], false, { gameMode: 'quest' })
+
+    submitAnswer('went')
+    advanceQuestion()
+    advanceQuestion()
+
+    expect(submitLevelAttempt).toHaveBeenCalledTimes(1)
+  })
+})
