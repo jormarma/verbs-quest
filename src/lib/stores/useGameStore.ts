@@ -186,6 +186,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     })),
 
     submitAnswer: (answer) => set((state) => {
+        if (state.session.status === "FINISHED") return state
         if (state.gameplay.feedbackState !== "NONE") return state // Prevent multiple submissions
 
         const isMainQueue = state.gameplay.currentQuestionIndex < state.gameplay.mainQueue.length
@@ -232,6 +233,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
     advanceQuestion: () => set((state) => {
+        if (state.session.status === "FINISHED") return state
         const nextIndex = state.gameplay.currentQuestionIndex + 1
         const totalQuestions = state.gameplay.mainQueue.length + state.gameplay.retryQueue.length
         const isFinished = nextIndex >= totalQuestions
@@ -360,24 +362,28 @@ export const useGameStore = create<GameState>((set, get) => ({
         const state = get()
         if (state.session.status !== "PLAYING") return
 
-        let result: SubmitAttemptResult | null = null
-        if (state.session.startTime && shouldSubmitLevelAttempt(state.session.gameMode)) {
-            set((current) => ({ gameplay: { ...current.gameplay, ...PENDING_SUBMISSION } }))
-            // Wait for DB failure sync to complete before allowing user to click Continue
-            result = await submitLevelAttempt({
-                levelId: state.session.level,
-                startTime: new Date(state.session.startTime).toISOString(),
-                endTime: new Date(state.session.startTime + (state.session.config.timeLimit + 1) * 1000).toISOString(),
-                errorCount: state.gameplay.errorsInLevel + 1, // Add an error to ensure it is not perfect
-                questionsCount: state.gameplay.mainQueue.length
-            })
-            // The run may have been replaced while waiting, so leave the newer run alone.
-            if (get().session.startTime !== state.session.startTime) return
+        const submittedStart = state.session.startTime
+        if (!submittedStart || !shouldSubmitLevelAttempt(state.session.gameMode)) {
+            set((current) => ({
+                session: { ...current.session, status: "FINISHED", endTime: Date.now() }
+            }))
+            return
         }
 
-        set((state) => ({
-            session: { ...state.session, status: "FINISHED", endTime: Date.now() },
-            gameplay: { ...state.gameplay, ...(result ? submissionFields(result) : {}) }
+        // Finish the run before the save, so pause, Continue and a second timer call all refuse it.
+        set((current) => ({
+            session: { ...current.session, status: "FINISHED", endTime: Date.now() },
+            gameplay: { ...current.gameplay, ...PENDING_SUBMISSION }
         }))
+        const result = await submitLevelAttempt({
+            levelId: state.session.level,
+            startTime: new Date(submittedStart).toISOString(),
+            endTime: new Date(submittedStart + (state.session.config.timeLimit + 1) * 1000).toISOString(),
+            errorCount: state.gameplay.errorsInLevel + 1, // Add an error to ensure it is not perfect
+            questionsCount: state.gameplay.mainQueue.length
+        })
+        // The run may have been replaced while waiting, so leave the newer run alone.
+        if (get().session.startTime !== submittedStart) return
+        set((current) => ({ gameplay: { ...current.gameplay, ...submissionFields(result) } }))
     }
 }))
