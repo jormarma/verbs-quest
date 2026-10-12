@@ -6,7 +6,7 @@ This folder maps the user-visible behavior of verbs-quest to the commands and pr
 
 - Launch the stack with `.claude/skills/verify/scripts/launch.sh`, then run `node .claude/skills/verify/scripts/doctor.mjs` and require `doctor: healthy (15/15 checks)`.
 - The scratch database is `verbs-quest-verify` on the run's SpacetimeDB port, loaded from `verbs.csv`: 75, 83, and 319 verbs in categories 1, 2, and 3, with category 1 active.
-- The scratch admin is the CLI login identity, with a level cap of 15, so levels 16 and above stay locked for it.
+- The scratch admin is the CLI login identity. The verb import clamps its level cap to the 15 levels of the active list, so levels 16 and above do not exist for it.
 - Start the session each feature needs: `node .claude/skills/verify/scripts/control.mjs session-admin` for the admin dashboard and the player lobby, or `session-signed-out` for the sign-in gate.
 - Never drive an instance that the current run did not launch.
 

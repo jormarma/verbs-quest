@@ -7,16 +7,26 @@ const mode = flags.mode ?? 'quest'
 const level = Number(flags.level ?? 1)
 const wrongTarget = Number(flags.wrong ?? 1)
 const paceMs = Number(flags['pace-ms'] ?? 900)
+const idle = Boolean(flags.idle)
+const offline = Boolean(flags.offline)
+const label = idle ? 'idle' : offline ? 'offline' : `wrong${wrongTarget}`
+const thenLevel = flags['then-level'] === undefined ? null : Number(flags['then-level'])
 
 if (!['quest', 'practice'].includes(mode)) throw new Error('--mode must be quest or practice')
+if (idle && mode !== 'quest') throw new Error('--idle applies only to quest runs')
+if (offline && (mode !== 'quest' || idle)) throw new Error('--offline applies only to quest runs without --idle')
+if (thenLevel !== null && (mode !== 'quest' || idle || offline || !Number.isInteger(thenLevel) || thenLevel < 1)) {
+  throw new Error('--then-level needs a quest run without --idle or --offline, and a positive level number')
+}
 if (!Number.isInteger(level) || level < 1) throw new Error('--level must be a positive integer')
 if (!Number.isInteger(wrongTarget) || wrongTarget < 0) throw new Error('--wrong must be a non-negative integer')
 
 const run = loadRun()
+const watchdogMs = idle ? 300000 : 240000
 const watchdog = setTimeout(() => {
-  console.error('FAIL: level-run exceeded 240 s')
+  console.error(`FAIL: level-run exceeded ${watchdogMs / 1000} s`)
   process.exit(2)
-}, 240000)
+}, watchdogMs)
 watchdog.unref()
 
 const verbs = sqlRows(
@@ -29,10 +39,12 @@ const lessonLine = [...new Set(verbs.map((verb) => verb.infinitive))]
   .join(', ')
   .toUpperCase()
 
-const sessionColumns = 'id, level_attempted, errors_count, is_perfect_run, duration_seconds'
+const sessionColumns = 'id, user_identity, level_attempted, errors_count, is_perfect_run, duration_seconds'
 const attemptQuery = 'SELECT last_status, last_new_level FROM user_attempt'
+const capQuery = 'SELECT current_level_cap FROM user'
 const sessionsBefore = sqlRows(run, `SELECT ${sessionColumns} FROM game_session`)
 const attemptBefore = sqlRows(run, attemptQuery)
+const capBefore = Number(sqlRows(run, capQuery)[0]?.current_level_cap)
 const beforeIds = new Set(sessionsBefore.map((row) => row.id))
 
 const assertions = []
@@ -51,19 +63,28 @@ async function readQuestion(page) {
       [...document.querySelectorAll('div')]
         .find((element) => element.children.length === 0 && /^PAST (SIMPLE|PARTICIPLE)$/.test(element.textContent.trim()))
         ?.textContent.trim() ?? null
-    const finished = headings.find((text) => /Level (Complete|Failed)|Practice complete/i.test(text)) ?? null
+    const finished = headings.find((text) => /Level (Complete|Failed)|Practice complete|Run not saved/i.test(text)) ?? null
     return { verb, tense, finished }
   })
 }
 
-async function selectLevel(page) {
-  const levelButton = page.getByRole('button', { name: String(level), exact: true })
+function lessonLineFor(target) {
+  const rows = sqlRows(run, `SELECT infinitive FROM verb WHERE level_group = ${target} AND active = true`)
+  return [...new Set(rows.map((verb) => verb.infinitive))]
+    .sort((a, b) => a.localeCompare(b))
+    .join(', ')
+    .toUpperCase()
+}
+
+// The lobby redraws while it loads and right after a run, so each click is bounded and repeated.
+async function selectLevel(page, target, expectedLine) {
+  const levelButton = page.getByRole('button', { name: String(target), exact: true })
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    await levelButton.click()
+    await levelButton.click({ timeout: 3000 }).catch(() => {})
     const shown = await page
       .waitForFunction(
         (expected) => [...document.querySelectorAll('p')].some((p) => p.textContent.trim() === expected),
-        lessonLine,
+        expectedLine,
         { timeout: 2000 },
       )
       .then(() => true, () => false)
@@ -79,6 +100,24 @@ async function waitForSubmission(expectedCount) {
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return sqlRows(run, `SELECT ${sessionColumns} FROM game_session`)
+}
+
+const formatTime = (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+// The sql output wraps an Identity as ["0x..."], so compare the hex value, not the array object.
+const identityHex = (value) => (Array.isArray(value) ? value[0] : value)
+
+async function waitForTopTimes(page) {
+  let shown = []
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    shown = await page.evaluate(() => {
+      const heading = [...document.querySelectorAll('h3')].find((h) => h.textContent.trim() === 'Top 3 Times')
+      if (!heading) return []
+      return [...heading.parentElement.querySelectorAll('li span.font-mono')].map((span) => span.textContent.trim())
+    })
+    if (shown.length > 0) break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return shown
 }
 
 let page = null
@@ -100,7 +139,7 @@ async function main() {
   if (await previewButton.isVisible()) await previewButton.click()
   await playButton.click()
 
-  const lessonShown = await selectLevel(page)
+  const lessonShown = await selectLevel(page, level, lessonLine)
   record('lesson lists the level verbs', lessonShown, `level ${level}: ${lessonLine}`)
   if (!lessonShown) throw new Error(`lesson never showed the verbs of level ${level}`)
   await page.screenshot({ path: evidencePath(run, 'screens', `${mode}-lobby-level${level}.png`) })
@@ -108,6 +147,7 @@ async function main() {
   if (mode === 'quest') {
     await page.getByRole('button', { name: 'Start Quest', exact: true }).click()
     await page.getByRole('button', { name: 'Pause', exact: true }).waitFor({ state: 'visible', timeout: 15000 })
+    if (offline) await page.context().setOffline(true)
   } else {
     await page.getByRole('button', { name: `Practice level ${level}`, exact: true }).click()
     await page.getByRole('button', { name: 'Cancel Run', exact: true }).waitFor({ state: 'visible', timeout: 15000 })
@@ -121,6 +161,10 @@ async function main() {
     if (question.finished) {
       finished = question.finished
       break
+    }
+    if (idle) {
+      await page.waitForTimeout(1000)
+      continue
     }
     if (!question.verb || !question.tense) {
       await page.waitForTimeout(250)
@@ -158,56 +202,108 @@ async function main() {
   const errorCount = answers.filter((answer) => answer.feedback === 'INCORRECT!').length
   const gradedAsExpected = answers.every((answer) => answer.feedback === answer.expectedFeedback)
   record('answers graded as expected', gradedAsExpected, `${answers.length} answers, ${errorCount} incorrect`)
-  record(
-    'question count is two per verb plus one per miss',
-    answers.length === 2 * verbs.length + errorCount,
-    `${answers.length} answers for ${verbs.length} verbs and ${errorCount} misses`,
-  )
+  if (!idle) {
+    record(
+      'question count is two per verb plus one per miss',
+      answers.length === 2 * verbs.length + errorCount,
+      `${answers.length} answers for ${verbs.length} verbs and ${errorCount} misses`,
+    )
+  }
 
-  const expectedHeading = mode === 'quest' ? 'Level Complete!' : 'Practice complete!'
+  const expectedHeading = offline
+    ? 'Run not saved'
+    : idle
+      ? 'Level Failed!'
+      : mode === 'quest'
+        ? 'Level Complete!'
+        : 'Practice complete!'
   record('finish screen heading', finished === expectedHeading, `"${finished}"`)
 
-  const expectedNewRows = mode === 'quest' ? 1 : 0
+  const expectedNewRows = mode === 'quest' && !offline ? 1 : 0
   if (mode === 'practice') await new Promise((resolve) => setTimeout(resolve, 3000))
   const sessionsAfter = await waitForSubmission(expectedNewRows)
   const newSessions = sessionsAfter.filter((row) => !beforeIds.has(row.id))
   const attemptAfter = sqlRows(run, attemptQuery)
 
+  const shownTimes = mode === 'quest' && !idle && !offline ? await waitForTopTimes(page) : []
   await page.waitForTimeout(500)
-  await page.screenshot({ path: evidencePath(run, 'screens', `${mode}-finished-level${level}-wrong${wrongTarget}.png`) })
+  await page.screenshot({ path: evidencePath(run, 'screens', `${mode}-finished-level${level}-${label}.png`) })
   const bodyText = await page.locator('body').innerText()
 
-  if (mode === 'quest') {
+  if (offline) {
+    record('no game_session row while offline', newSessions.length === 0, `${newSessions.length} new row(s)`)
+    record(
+      'screen says the run is not saved',
+      bodyText.includes('The server did not confirm this run'),
+      'The server did not confirm this run, so it does not count yet.',
+    )
+    const queued = await page.evaluate(() => JSON.parse(localStorage.getItem('verbs_quest_offline_queue') ?? '[]').length)
+    record('run waits in the offline queue', queued === 1, `${queued} queued run(s)`)
+    await page.context().setOffline(false)
+    const synced = (await waitForSubmission(1)).filter((row) => !beforeIds.has(row.id))
+    record('queued run is saved once back online', synced.length === 1, `${synced.length} new row(s) after reconnect`)
+    const remaining = await page.evaluate(() => localStorage.getItem('verbs_quest_offline_queue'))
+    record('offline queue is empty after the sync', remaining === null, `queue ${remaining ?? 'empty'}`)
+  } else if (mode === 'quest') {
     record('one game_session row written', newSessions.length === 1, `${newSessions.length} new row(s)`)
     const [row] = newSessions
+    const expectedErrors = idle ? errorCount + 1 : errorCount
     if (row) {
       record(
         'row records level and error count',
-        row.level_attempted === level && row.errors_count === errorCount,
-        `level ${row.level_attempted}, errors ${row.errors_count}, expected level ${level}, errors ${errorCount}`,
+        row.level_attempted === level && row.errors_count === expectedErrors,
+        `level ${row.level_attempted}, errors ${row.errors_count}, expected level ${level}, errors ${expectedErrors}`,
       )
       record(
         'perfect flag matches error count',
-        row.is_perfect_run === (errorCount === 0),
-        `is_perfect_run ${row.is_perfect_run} with ${errorCount} error(s)`,
+        row.is_perfect_run === (expectedErrors === 0),
+        `is_perfect_run ${row.is_perfect_run} with ${expectedErrors} error(s)`,
       )
     }
-    const expectedStatus = errorCount === 0 ? 'unlocked' : 'maintained'
+    const expectedStatus = idle ? 'downgraded' : errorCount === 0 ? 'unlocked' : 'maintained'
     record(
       'server stores the run status',
       attemptAfter[0]?.last_status === expectedStatus,
       `user_attempt.last_status ${attemptAfter[0]?.last_status}, expected ${expectedStatus}`,
     )
-    record(
-      'screen shows the error count',
-      bodyText.includes(`Errors made: ${errorCount}`),
-      `Errors made: ${errorCount}`,
-    )
-    if (errorCount > 0) {
+    if (idle) {
+      record('screen shows the time-out failure', bodyText.includes("Time's up!"), "Time's up!")
+      record('failed run hides TOP 3 TIMES', !/TOP 3 TIMES/i.test(bodyText), 'no TOP 3 TIMES panel on screen')
+      const lastNewLevel = Number(attemptAfter[0]?.last_new_level)
+      record('server lowers the cap by one', lastNewLevel === capBefore - 1, `server cap ${capBefore} to ${lastNewLevel}`)
+    } else if (errorCount > 0) {
+      record(
+        'screen shows the error count',
+        bodyText.includes(`Errors made: ${errorCount}`),
+        `Errors made: ${errorCount}`,
+      )
       record(
         'screen explains that a perfect run is needed',
         bodyText.includes('need a perfect run'),
         'Good job, but you need a perfect run to unlock the next level.',
+      )
+    } else {
+      const lastNewLevel = Number(attemptAfter[0]?.last_new_level)
+      const raisedCap = lastNewLevel > capBefore
+      const expectedMessage = raisedCap ? 'Level unlocked' : 'Perfect run!'
+      const shownLine = bodyText.match(/(Perfect run|Level unlocked)[^\n]*/)?.[0] ?? 'no perfect-run message on screen'
+      record(
+        `perfect run shows "${expectedMessage}"`,
+        bodyText.includes(expectedMessage),
+        `${shownLine} (server cap ${capBefore} to ${lastNewLevel})`,
+      )
+    }
+    if (!idle) {
+      const callerHex = identityHex(newSessions[0]?.user_identity)
+      const expectedTimes = sessionsAfter
+        .filter((row) => identityHex(row.user_identity) === callerHex && row.level_attempted === level)
+        .sort((a, b) => a.duration_seconds - b.duration_seconds)
+        .slice(0, 3)
+        .map((row) => formatTime(row.duration_seconds))
+      record(
+        'TOP 3 TIMES lists the saved runs',
+        JSON.stringify(shownTimes) === JSON.stringify(expectedTimes),
+        `shows ${shownTimes.join(', ') || 'nothing'}, expected ${expectedTimes.join(', ')}`,
       )
     }
   } else {
@@ -216,23 +312,22 @@ async function main() {
     record('screen shows the practice result', bodyText.includes(practiceMessage), practiceMessage)
   }
 
-  const knownIssues = []
-  if (mode === 'quest' && errorCount === 0 && !/Perfect run!/.test(bodyText)) {
-    const needPerfect = 'Good job, but you need a perfect run to unlock the next level.'
-    knownIssues.push({
-      id: 'perfect-run-message',
-      observed: bodyText.includes(needPerfect) ? needPerfect : 'no perfect-run message',
-      reference: 'src/lib/utils/sync.ts reads user_attempt, which no subscription fills',
+  if (thenLevel !== null) {
+    const nextLine = lessonLineFor(thenLevel)
+    if (nextLine === '') throw new Error(`no active verbs in level ${thenLevel}; check the active category`)
+    await page.evaluate(() => {
+      window.__sameDocument = 'marker'
+    })
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await page.getByRole('button', { name: 'Play', exact: true }).click({ timeout: 5000 }).catch(() => {})
+    const nextShown = await selectLevel(page, thenLevel, nextLine)
+    const sameDocument = await page.evaluate(() => window.__sameDocument === 'marker')
+    record(`level ${thenLevel} is selectable after the run`, nextShown, `lesson lists ${nextLine}`)
+    record('no page load between the finish screen and the next level', sameDocument, 'the page marker survived')
+    await page.screenshot({
+      path: evidencePath(run, 'screens', `${mode}-selectable-level${thenLevel}-after-level${level}.png`),
     })
   }
-  if (mode === 'quest' && /TOP 3 TIMES/i.test(bodyText) && /Loading\.\.\./.test(bodyText)) {
-    knownIssues.push({
-      id: 'top-3-times-loading',
-      observed: 'Top 3 Times stays on Loading...',
-      reference: 'src/lib/utils/sync.ts reads game_session, which no subscription fills',
-    })
-  }
-  for (const issue of knownIssues) console.log(`NOTE  known issue ${issue.id}: ${issue.observed}`)
 
   const attemptChanged = JSON.stringify(attemptAfter) !== JSON.stringify(attemptBefore)
   if (mode === 'practice') {
@@ -242,7 +337,8 @@ async function main() {
   return {
     mode,
     level,
-    wrongRequested: wrongTarget,
+    wrongRequested: idle ? null : wrongTarget,
+    idle,
     lesson: lessonLine,
     answers,
     finished,
@@ -251,7 +347,6 @@ async function main() {
     newSessions,
     attemptBefore,
     attemptAfter,
-    knownIssues,
     assertions,
   }
 }
@@ -271,7 +366,12 @@ try {
 }
 
 result.finishedAt = new Date().toISOString()
-const file = evidencePath(run, 'flows', `${mode}-level${level}-wrong${wrongTarget}.json`)
+const file = evidencePath(run, 'flows', `${mode}-level${level}-${label}.json`)
 fs.writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`)
-console.log(`${result.pass ? 'PASS' : 'FAIL'}  ${mode} level ${level} with ${wrongTarget} planned miss(es): ${file}`)
+const described = idle
+  ? 'timed out (--idle)'
+  : offline
+    ? 'went offline before the finish (--offline)'
+    : `with ${wrongTarget} planned miss(es)`
+console.log(`${result.pass ? 'PASS' : 'FAIL'}  ${mode} level ${level} ${described}: ${file}`)
 process.exit(result.pass ? 0 : 1)

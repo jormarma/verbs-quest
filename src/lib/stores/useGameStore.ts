@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import { submitLevelAttempt } from '../utils/sync'
+import { submitLevelAttempt, type SubmitAttemptResult } from '../utils/sync'
 import { shouldSubmitLevelAttempt, type GameMode } from '../game/gameMode'
 import { recordVerbError } from '../game/verbStats'
 
 export type GameStatus = "IDLE" | "PLAYING" | "PAUSED" | "FINISHED"
-export type SubmissionStatus = "unlocked" | "maintained" | "downgraded" | "rejected" | null
+export type SubmissionStatus = "pending" | "unlocked" | "maintained" | "downgraded" | "unconfirmed" | "rejected" | null
 
 export interface TopScoreEntry {
     duration_seconds: number
@@ -55,6 +55,7 @@ export interface GameState {
         topScores: TopScoreEntry[]
         submissionStatus: SubmissionStatus
         submissionNewLevel: number | null
+        submissionPreviousCap: number | null
     }
 
     // Actions
@@ -74,6 +75,37 @@ export interface GameState {
     forceTimeout: () => void
     cancelGame: () => void
     setTopScores: (scores: TopScoreEntry[]) => void
+}
+
+type SubmissionFields = Pick<GameState["gameplay"], "submissionStatus" | "submissionNewLevel" | "submissionPreviousCap" | "topScores">
+
+const PENDING_SUBMISSION: SubmissionFields = {
+    submissionStatus: "pending",
+    submissionNewLevel: null,
+    submissionPreviousCap: null,
+    topScores: []
+}
+
+function submissionFields(result: SubmitAttemptResult): SubmissionFields {
+    const verdict = result.data?.status
+    if (
+        result.success
+        && result.data
+        && (verdict === "unlocked" || verdict === "maintained" || verdict === "downgraded")
+    ) {
+        return {
+            submissionStatus: verdict,
+            submissionNewLevel: result.data.new_level,
+            submissionPreviousCap: result.previousLevelCap ?? null,
+            topScores: result.topScores ?? []
+        }
+    }
+    return {
+        submissionStatus: result.rejected ? "rejected" : "unconfirmed",
+        submissionNewLevel: null,
+        submissionPreviousCap: null,
+        topScores: []
+    }
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -101,7 +133,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         feedbackTarget: null,
         topScores: [],
         submissionStatus: null,
-        submissionNewLevel: null
+        submissionNewLevel: null,
+        submissionPreviousCap: null
     },
 
     startGame: (level, questions, delayTimer = false, options) => {
@@ -137,7 +170,8 @@ export const useGameStore = create<GameState>((set, get) => ({
                 feedbackTarget: null,
                 topScores: [],
                 submissionStatus: null,
-                submissionNewLevel: null
+                submissionNewLevel: null,
+                submissionPreviousCap: null
             }
         })
     },
@@ -151,6 +185,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     })),
 
     submitAnswer: (answer) => set((state) => {
+        if (state.session.status === "FINISHED") return state
         if (state.gameplay.feedbackState !== "NONE") return state // Prevent multiple submissions
 
         const isMainQueue = state.gameplay.currentQuestionIndex < state.gameplay.mainQueue.length
@@ -197,47 +232,33 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
     advanceQuestion: () => set((state) => {
+        if (state.session.status === "FINISHED") return state
         const nextIndex = state.gameplay.currentQuestionIndex + 1
         const totalQuestions = state.gameplay.mainQueue.length + state.gameplay.retryQueue.length
         const isFinished = nextIndex >= totalQuestions
+        const submittedStart = isFinished && shouldSubmitLevelAttempt(state.session.gameMode)
+            ? state.session.startTime
+            : null
 
-        if (
-            isFinished
-            && state.session.startTime
-            && shouldSubmitLevelAttempt(state.session.gameMode)
-        ) {
+        if (submittedStart) {
             // Fire and forget the sync submission
             submitLevelAttempt({
                 levelId: state.session.level,
-                startTime: new Date(state.session.startTime).toISOString(),
+                startTime: new Date(submittedStart).toISOString(),
                 endTime: new Date().toISOString(),
                 errorCount: state.gameplay.errorsInLevel,
                 questionsCount: state.gameplay.mainQueue.length
-            }).then(res => {
-                if (res.success) {
-                    set((current) => ({
-                        gameplay: {
-                            ...current.gameplay,
-                            topScores: res.topScores || [],
-                            submissionStatus: (res.data?.status as SubmissionStatus) ?? null,
-                            submissionNewLevel: typeof res.data?.new_level === 'number' ? res.data.new_level : null
-                        }
-                    }))
-                } else if (res.rejected) {
-                    set((current) => ({
-                        gameplay: {
-                            ...current.gameplay,
-                            submissionStatus: "rejected",
-                            submissionNewLevel: null
-                        }
-                    }))
-                }
+            }).then((result) => {
+                // A late answer must not land on a run that replaced this one.
+                if (get().session.startTime !== submittedStart) return
+                set((current) => ({ gameplay: { ...current.gameplay, ...submissionFields(result) } }))
             })
         }
 
         return {
             gameplay: {
                 ...state.gameplay,
+                ...(submittedStart ? PENDING_SUBMISSION : {}),
                 currentQuestionIndex: nextIndex,
                 currentInput: "",
                 feedbackState: "NONE",
@@ -301,7 +322,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             feedbackTarget: null,
             topScores: [],
             submissionStatus: null,
-            submissionNewLevel: null
+            submissionNewLevel: null,
+            submissionPreviousCap: null
         }
     }),
 
@@ -326,7 +348,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             feedbackTarget: null,
             topScores: [],
             submissionStatus: null,
-            submissionNewLevel: null
+            submissionNewLevel: null,
+            submissionPreviousCap: null
         }
     })),
 
@@ -338,21 +361,28 @@ export const useGameStore = create<GameState>((set, get) => ({
         const state = get()
         if (state.session.status !== "PLAYING") return
 
-        if (state.session.startTime && shouldSubmitLevelAttempt(state.session.gameMode)) {
-            // Wait for DB failure sync to complete before allowing user to click Continue
-            await submitLevelAttempt({
-                levelId: state.session.level,
-                startTime: new Date(state.session.startTime).toISOString(),
-                endTime: new Date(state.session.startTime + (state.session.config.timeLimit + 1) * 1000).toISOString(),
-                errorCount: state.gameplay.errorsInLevel + 1, // Add an error to ensure it is not perfect
-                questionsCount: state.gameplay.mainQueue.length
-            })
+        const submittedStart = state.session.startTime
+        if (!submittedStart || !shouldSubmitLevelAttempt(state.session.gameMode)) {
+            set((current) => ({
+                session: { ...current.session, status: "FINISHED", endTime: Date.now() }
+            }))
+            return
         }
 
-        set((state) => ({
-            session: { ...state.session, status: "FINISHED", endTime: Date.now() },
-            // Add a massive error so the UI knows it was a timeout fail
-            gameplay: { ...state.gameplay, errorsInLevel: state.gameplay.errorsInLevel + 999 }
+        // Finish the run before the save, so pause, Continue and a second timer call all refuse it.
+        set((current) => ({
+            session: { ...current.session, status: "FINISHED", endTime: Date.now() },
+            gameplay: { ...current.gameplay, ...PENDING_SUBMISSION }
         }))
+        const result = await submitLevelAttempt({
+            levelId: state.session.level,
+            startTime: new Date(submittedStart).toISOString(),
+            endTime: new Date(submittedStart + (state.session.config.timeLimit + 1) * 1000).toISOString(),
+            errorCount: state.gameplay.errorsInLevel + 1, // Add an error to ensure it is not perfect
+            questionsCount: state.gameplay.mainQueue.length
+        })
+        // The run may have been replaced while waiting, so leave the newer run alone.
+        if (get().session.startTime !== submittedStart) return
+        set((current) => ({ gameplay: { ...current.gameplay, ...submissionFields(result) } }))
     }
 }))
