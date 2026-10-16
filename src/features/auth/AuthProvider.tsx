@@ -294,14 +294,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                         </div>
                                     )}
                                     <div className="space-y-1 text-left">
-                                        <label className="text-sm font-medium text-slate-300">{t('auth.username')}</label>
+                                        <label htmlFor="vq_google_username" className="text-sm font-medium text-slate-300">{t('auth.username')}</label>
+                                        <span id="vq_google_username_hint" className="sr-only">{t('auth.username_hint')}</span>
                                         <input
+                                            id="vq_google_username"
                                             type="text"
                                             name="vq_google_username"
                                             required
                                             minLength={3}
                                             maxLength={12}
                                             pattern="^[a-zA-Z0-9_]+$"
+                                            aria-describedby="vq_google_username_hint"
                                             title={t('auth.username_hint')}
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
